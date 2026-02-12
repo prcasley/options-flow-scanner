@@ -1,0 +1,719 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Options Flow Scanner Dashboard</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<style>
+/* ── Reset & Base ──────────────────────────────────────────── */
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg-primary:#0a0e17;--bg-secondary:#111827;--bg-card:#1a2235;
+  --bg-card-hover:#1f2a40;--border:#2a3550;--border-accent:#3b82f6;
+  --text-primary:#e2e8f0;--text-secondary:#94a3b8;--text-muted:#64748b;
+  --green:#22c55e;--green-dim:#16a34a;--red:#ef4444;--red-dim:#dc2626;
+  --blue:#3b82f6;--cyan:#06b6d4;--amber:#f59e0b;--purple:#a855f7;
+  --font-mono:'Courier New',Consolas,monospace;
+  --font-sans:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
+}
+html{font-size:14px;scroll-behavior:smooth}
+body{
+  font-family:var(--font-sans);background:var(--bg-primary);
+  color:var(--text-primary);min-height:100vh;
+  background-image:radial-gradient(ellipse at 50% 0%,#1a2a4a 0%,transparent 60%);
+}
+a{color:var(--blue);text-decoration:none}
+
+/* ── Scrollbar ─────────────────────────────────────────────── */
+::-webkit-scrollbar{width:6px;height:6px}
+::-webkit-scrollbar-track{background:var(--bg-primary)}
+::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}
+
+/* ── Layout ────────────────────────────────────────────────── */
+.dashboard{max-width:1440px;margin:0 auto;padding:1rem}
+header{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:1rem 1.5rem;background:var(--bg-secondary);
+  border:1px solid var(--border);border-radius:8px;margin-bottom:1.25rem;
+}
+.logo{display:flex;align-items:center;gap:.75rem}
+.logo svg{width:32px;height:32px}
+.logo h1{font-size:1.25rem;font-weight:700;letter-spacing:-.02em}
+.logo span{color:var(--blue)}
+.header-right{display:flex;align-items:center;gap:1.25rem}
+.market-status{
+  display:flex;align-items:center;gap:.5rem;
+  font-size:.8rem;font-family:var(--font-mono);color:var(--text-secondary);
+}
+.status-dot{width:8px;height:8px;border-radius:50%;background:var(--green);
+  box-shadow:0 0 6px var(--green);animation:pulse 2s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+.clock{font-family:var(--font-mono);font-size:.85rem;color:var(--cyan)}
+
+/* ── Grid ──────────────────────────────────────────────────── */
+.grid-top{display:grid;grid-template-columns:repeat(4,1fr);gap:1rem;margin-bottom:1.25rem}
+.grid-main{display:grid;grid-template-columns:2fr 1fr;gap:1.25rem;margin-bottom:1.25rem}
+.grid-bottom{display:grid;grid-template-columns:1fr 1fr 1fr;gap:1.25rem;margin-bottom:1.25rem}
+.grid-full{margin-bottom:1.25rem}
+
+/* ── Card ──────────────────────────────────────────────────── */
+.card{
+  background:var(--bg-card);border:1px solid var(--border);border-radius:8px;
+  padding:1.25rem;transition:border-color .2s;
+}
+.card:hover{border-color:var(--border-accent)}
+.card-header{
+  display:flex;align-items:center;justify-content:space-between;
+  margin-bottom:1rem;padding-bottom:.75rem;border-bottom:1px solid var(--border);
+}
+.card-title{font-size:.9rem;font-weight:600;text-transform:uppercase;
+  letter-spacing:.05em;color:var(--text-secondary)}
+.card-badge{font-size:.7rem;padding:2px 8px;border-radius:4px;font-weight:600}
+.badge-live{background:rgba(34,197,94,.15);color:var(--green)}
+.badge-demo{background:rgba(59,130,246,.15);color:var(--blue)}
+
+/* ── Signal Cards (top row) ────────────────────────────────── */
+.signal-card{position:relative;overflow:hidden}
+.signal-card::before{
+  content:'';position:absolute;top:0;left:0;right:0;height:3px;
+}
+.signal-card.bullish::before{background:linear-gradient(90deg,var(--green),var(--cyan))}
+.signal-card.bearish::before{background:linear-gradient(90deg,var(--red),var(--amber))}
+.signal-card.neutral::before{background:linear-gradient(90deg,var(--blue),var(--purple))}
+.signal-ticker{font-size:1.5rem;font-weight:800;font-family:var(--font-mono)}
+.signal-price{font-family:var(--font-mono);font-size:1.1rem;margin:.25rem 0}
+.signal-change{font-family:var(--font-mono);font-size:.85rem;font-weight:600}
+.signal-change.up{color:var(--green)}
+.signal-change.down{color:var(--red)}
+.signal-meta{
+  display:grid;grid-template-columns:1fr 1fr;gap:.5rem;
+  margin-top:.75rem;padding-top:.75rem;border-top:1px solid var(--border);
+}
+.signal-meta-item{display:flex;flex-direction:column;gap:2px}
+.signal-meta-label{font-size:.65rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:.05em}
+.signal-meta-value{font-size:.8rem;font-family:var(--font-mono);font-weight:600}
+.risk-score{display:inline-flex;align-items:center;gap:4px}
+.risk-bar{display:flex;gap:2px}
+.risk-bar span{width:6px;height:14px;border-radius:2px;background:var(--border)}
+.risk-bar span.active-green{background:var(--green)}
+.risk-bar span.active-amber{background:var(--amber)}
+.risk-bar span.active-red{background:var(--red)}
+.signal-type-tag{
+  display:inline-block;font-size:.65rem;padding:2px 6px;border-radius:3px;
+  font-weight:600;text-transform:uppercase;margin-top:.5rem;
+}
+.tag-sweep{background:rgba(168,85,247,.2);color:var(--purple)}
+.tag-unusual{background:rgba(6,182,212,.2);color:var(--cyan)}
+.tag-block{background:rgba(245,158,11,.2);color:var(--amber)}
+.tag-split{background:rgba(59,130,246,.2);color:var(--blue)}
+
+/* ── Charts ────────────────────────────────────────────────── */
+.chart-container{position:relative;width:100%;height:320px}
+.chart-tabs{display:flex;gap:.5rem;margin-bottom:1rem}
+.chart-tab{
+  padding:.35rem .75rem;border-radius:4px;font-size:.75rem;cursor:pointer;
+  background:var(--bg-secondary);color:var(--text-secondary);border:1px solid var(--border);
+  transition:all .2s;
+}
+.chart-tab.active{background:var(--blue);color:#fff;border-color:var(--blue)}
+
+/* ── Scanner Status ────────────────────────────────────────── */
+.scanner-grid{display:grid;grid-template-columns:1fr 1fr;gap:.75rem}
+.scanner-item{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:.6rem .75rem;background:var(--bg-secondary);border-radius:6px;
+  border:1px solid var(--border);
+}
+.scanner-label{font-size:.78rem;color:var(--text-secondary)}
+.scanner-value{font-family:var(--font-mono);font-size:.8rem;font-weight:600}
+.scanner-value.online{color:var(--green)}
+.scanner-value.warning{color:var(--amber)}
+.scanner-value.error{color:var(--red)}
+.progress-bar{
+  width:100%;height:6px;background:var(--bg-primary);border-radius:3px;
+  margin-top:.75rem;overflow:hidden;
+}
+.progress-fill{height:100%;border-radius:3px;transition:width .5s;
+  background:linear-gradient(90deg,var(--blue),var(--cyan))}
+
+/* ── Alert Config ──────────────────────────────────────────── */
+.alert-list{display:flex;flex-direction:column;gap:.5rem}
+.alert-row{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:.6rem .75rem;background:var(--bg-secondary);border-radius:6px;
+  border:1px solid var(--border);
+}
+.alert-name{font-size:.8rem;display:flex;align-items:center;gap:.5rem}
+.alert-icon{width:18px;height:18px;border-radius:4px;display:flex;
+  align-items:center;justify-content:center;font-size:.65rem}
+.alert-icon.discord{background:rgba(88,101,242,.2);color:#5865F2}
+.alert-icon.csv{background:rgba(34,197,94,.2);color:var(--green)}
+.alert-icon.webhook{background:rgba(245,158,11,.2);color:var(--amber)}
+.toggle{width:36px;height:20px;border-radius:10px;background:var(--border);
+  position:relative;cursor:pointer;transition:background .2s}
+.toggle.on{background:var(--green)}
+.toggle::after{
+  content:'';position:absolute;top:2px;left:2px;width:16px;height:16px;
+  border-radius:50%;background:#fff;transition:transform .2s;
+}
+.toggle.on::after{transform:translateX(16px)}
+
+/* ── Flow Table ────────────────────────────────────────────── */
+.flow-table{width:100%;border-collapse:collapse;font-size:.78rem}
+.flow-table thead{position:sticky;top:0;z-index:1}
+.flow-table th{
+  text-align:left;padding:.6rem .75rem;background:var(--bg-secondary);
+  color:var(--text-muted);font-weight:600;text-transform:uppercase;
+  font-size:.68rem;letter-spacing:.05em;border-bottom:1px solid var(--border);
+}
+.flow-table td{
+  padding:.55rem .75rem;border-bottom:1px solid var(--border);
+  font-family:var(--font-mono);color:var(--text-secondary);
+}
+.flow-table tr:hover td{background:var(--bg-card-hover);color:var(--text-primary)}
+.flow-table .call{color:var(--green)}
+.flow-table .put{color:var(--red)}
+.sentiment-bar{
+  display:inline-block;width:40px;height:8px;border-radius:4px;
+  background:var(--border);overflow:hidden;vertical-align:middle;
+}
+.sentiment-fill{height:100%;border-radius:4px}
+
+/* ── Pattern Analysis ──────────────────────────────────────── */
+.pattern-list{display:flex;flex-direction:column;gap:.6rem}
+.pattern-item{
+  padding:.75rem;background:var(--bg-secondary);border-radius:6px;
+  border-left:3px solid var(--blue);
+}
+.pattern-name{font-size:.82rem;font-weight:600;margin-bottom:.25rem}
+.pattern-desc{font-size:.72rem;color:var(--text-muted);line-height:1.4}
+.pattern-stats{
+  display:flex;gap:1rem;margin-top:.5rem;
+  font-size:.7rem;font-family:var(--font-mono);
+}
+.pattern-stat{display:flex;align-items:center;gap:.25rem}
+.pattern-stat .label{color:var(--text-muted)}
+.pattern-stat .value{font-weight:600}
+.pattern-item.high{border-left-color:var(--green)}
+.pattern-item.medium{border-left-color:var(--amber)}
+.pattern-item.low{border-left-color:var(--red)}
+
+/* ── Backtesting ───────────────────────────────────────────── */
+.backtest-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:.75rem;margin-bottom:1rem}
+.backtest-stat{
+  text-align:center;padding:.75rem;background:var(--bg-secondary);
+  border-radius:6px;border:1px solid var(--border);
+}
+.backtest-stat .number{
+  font-size:1.5rem;font-weight:800;font-family:var(--font-mono);
+  background:linear-gradient(135deg,var(--cyan),var(--blue));
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;
+}
+.backtest-stat .label{font-size:.68rem;color:var(--text-muted);
+  text-transform:uppercase;letter-spacing:.05em;margin-top:.25rem}
+.backtest-stat.positive .number{
+  background:linear-gradient(135deg,var(--green),var(--cyan));
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;
+}
+.backtest-stat.negative .number{
+  background:linear-gradient(135deg,var(--red),var(--amber));
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;
+}
+
+/* ── Footer ────────────────────────────────────────────────── */
+footer{
+  text-align:center;padding:1.5rem;color:var(--text-muted);
+  font-size:.72rem;border-top:1px solid var(--border);margin-top:1rem;
+}
+
+/* ── Responsive ────────────────────────────────────────────── */
+@media(max-width:1024px){
+  .grid-top{grid-template-columns:repeat(2,1fr)}
+  .grid-main{grid-template-columns:1fr}
+  .grid-bottom{grid-template-columns:1fr}
+}
+@media(max-width:600px){
+  .grid-top{grid-template-columns:1fr}
+  header{flex-direction:column;gap:.75rem;text-align:center}
+  .header-right{flex-direction:column}
+  .backtest-grid{grid-template-columns:1fr}
+  .scanner-grid{grid-template-columns:1fr}
+}
+</style>
+</head>
+<body>
+<div class="dashboard">
+
+  <!-- ── Header ──────────────────────────────────────────── -->
+  <header>
+    <div class="logo">
+      <svg viewBox="0 0 32 32" fill="none">
+        <rect width="32" height="32" rx="6" fill="#3b82f6" fill-opacity=".15"/>
+        <path d="M8 22l4-6 4 4 4-8 4 6" stroke="#3b82f6" stroke-width="2.5"
+              stroke-linecap="round" stroke-linejoin="round"/>
+        <circle cx="24" cy="18" r="2" fill="#22c55e"/>
+      </svg>
+      <h1>Options <span>Flow Scanner</span></h1>
+    </div>
+    <div class="header-right">
+      <div class="market-status">
+        <span class="status-dot"></span>
+        <span id="marketStatus">MARKET OPEN</span>
+      </div>
+      <div class="clock" id="clock">--:--:-- ET</div>
+    </div>
+  </header>
+
+  <!-- ── Signal Cards ────────────────────────────────────── -->
+  <section class="grid-top" id="signalCards"></section>
+
+  <!-- ── Main: Chart + Scanner Status ────────────────────── -->
+  <section class="grid-main">
+    <div class="card">
+      <div class="card-header">
+        <span class="card-title">Flow Volume Analysis</span>
+        <span class="card-badge badge-demo">Demo Data</span>
+      </div>
+      <div class="chart-tabs" id="chartTabs">
+        <div class="chart-tab active" data-chart="volume">Volume</div>
+        <div class="chart-tab" data-chart="oi">Open Interest</div>
+        <div class="chart-tab" data-chart="premium">Premium</div>
+      </div>
+      <div class="chart-container"><canvas id="mainChart"></canvas></div>
+    </div>
+    <div class="card">
+      <div class="card-header">
+        <span class="card-title">Scanner Status</span>
+        <span class="card-badge badge-live">Live</span>
+      </div>
+      <div class="scanner-grid">
+        <div class="scanner-item">
+          <span class="scanner-label">API Connection</span>
+          <span class="scanner-value online">Connected</span>
+        </div>
+        <div class="scanner-item">
+          <span class="scanner-label">Polygon.io</span>
+          <span class="scanner-value online">Active</span>
+        </div>
+        <div class="scanner-item">
+          <span class="scanner-label">Scan Interval</span>
+          <span class="scanner-value">60s</span>
+        </div>
+        <div class="scanner-item">
+          <span class="scanner-label">Rate Limit</span>
+          <span class="scanner-value warning">42/50</span>
+        </div>
+        <div class="scanner-item">
+          <span class="scanner-label">DB Records</span>
+          <span class="scanner-value">12,847</span>
+        </div>
+        <div class="scanner-item">
+          <span class="scanner-label">Signals Today</span>
+          <span class="scanner-value online">37</span>
+        </div>
+        <div class="scanner-item">
+          <span class="scanner-label">Uptime</span>
+          <span class="scanner-value">6h 42m</span>
+        </div>
+        <div class="scanner-item">
+          <span class="scanner-label">Last Scan</span>
+          <span class="scanner-value online" id="lastScan">--:--</span>
+        </div>
+      </div>
+      <div style="margin-top:1rem">
+        <div style="display:flex;justify-content:space-between;font-size:.7rem;color:var(--text-muted);margin-bottom:4px">
+          <span>Scan Progress</span><span>78%</span>
+        </div>
+        <div class="progress-bar"><div class="progress-fill" style="width:78%"></div></div>
+      </div>
+      <div style="margin-top:1rem">
+        <div style="display:flex;justify-content:space-between;font-size:.7rem;color:var(--text-muted);margin-bottom:4px">
+          <span>Memory Usage</span><span>156 MB / 512 MB</span>
+        </div>
+        <div class="progress-bar"><div class="progress-fill" style="width:30%;background:linear-gradient(90deg,var(--green),var(--cyan))"></div></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── Flow Table ──────────────────────────────────────── -->
+  <section class="grid-full">
+    <div class="card">
+      <div class="card-header">
+        <span class="card-title">Recent Options Flow</span>
+        <span class="card-badge badge-demo">Demo Data</span>
+      </div>
+      <div style="overflow-x:auto">
+        <table class="flow-table" id="flowTable">
+          <thead>
+            <tr>
+              <th>Time</th><th>Ticker</th><th>Type</th><th>Strike</th>
+              <th>Exp</th><th>Premium</th><th>Volume</th><th>OI</th>
+              <th>Vol/OI</th><th>Signal</th><th>Score</th><th>Sentiment</th>
+            </tr>
+          </thead>
+          <tbody id="flowBody"></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── Bottom: Pattern Analysis + Backtesting + Alert Config ── -->
+  <section class="grid-bottom">
+    <!-- Pattern Analysis -->
+    <div class="card">
+      <div class="card-header">
+        <span class="card-title">Pattern Analysis</span>
+        <span class="card-badge badge-demo">Demo</span>
+      </div>
+      <div class="pattern-list" id="patternList"></div>
+    </div>
+
+    <!-- Backtesting Stats -->
+    <div class="card">
+      <div class="card-header">
+        <span class="card-title">Backtesting Stats</span>
+        <span class="card-badge badge-demo">30-Day</span>
+      </div>
+      <div class="backtest-grid">
+        <div class="backtest-stat positive"><div class="number">68.4%</div><div class="label">Win Rate</div></div>
+        <div class="backtest-stat positive"><div class="number">2.3x</div><div class="label">Profit Factor</div></div>
+        <div class="backtest-stat"><div class="number">847</div><div class="label">Total Trades</div></div>
+        <div class="backtest-stat positive"><div class="number">+$42.1K</div><div class="label">Net P&L</div></div>
+        <div class="backtest-stat negative"><div class="number">-$8.2K</div><div class="label">Max Drawdown</div></div>
+        <div class="backtest-stat"><div class="number">1.87</div><div class="label">Sharpe Ratio</div></div>
+      </div>
+      <div class="chart-container" style="height:180px"><canvas id="backtestChart"></canvas></div>
+    </div>
+
+    <!-- Alert Config -->
+    <div class="card">
+      <div class="card-header">
+        <span class="card-title">Alert Configuration</span>
+        <span class="card-badge badge-live">Active</span>
+      </div>
+      <div class="alert-list">
+        <div class="alert-row">
+          <div class="alert-name"><div class="alert-icon discord">D</div>Discord Webhook</div>
+          <div class="toggle on" onclick="this.classList.toggle('on')"></div>
+        </div>
+        <div class="alert-row">
+          <div class="alert-name"><div class="alert-icon csv">C</div>CSV Logging</div>
+          <div class="toggle on" onclick="this.classList.toggle('on')"></div>
+        </div>
+        <div class="alert-row">
+          <div class="alert-name"><div class="alert-icon webhook">W</div>Custom Webhook</div>
+          <div class="toggle" onclick="this.classList.toggle('on')"></div>
+        </div>
+      </div>
+      <div style="margin-top:1rem;padding-top:.75rem;border-top:1px solid var(--border)">
+        <div style="font-size:.75rem;color:var(--text-muted);margin-bottom:.5rem">Alert Thresholds</div>
+        <div class="scanner-grid">
+          <div class="scanner-item">
+            <span class="scanner-label">Min Risk Score</span>
+            <span class="scanner-value">3</span>
+          </div>
+          <div class="scanner-item">
+            <span class="scanner-label">Volume Mult.</span>
+            <span class="scanner-value">5x</span>
+          </div>
+          <div class="scanner-item">
+            <span class="scanner-label">Min Premium</span>
+            <span class="scanner-value">$50K</span>
+          </div>
+          <div class="scanner-item">
+            <span class="scanner-label">Vol/OI Ratio</span>
+            <span class="scanner-value">&gt; 3.0</span>
+          </div>
+        </div>
+      </div>
+      <div style="margin-top:.75rem;padding-top:.75rem;border-top:1px solid var(--border)">
+        <div style="font-size:.75rem;color:var(--text-muted);margin-bottom:.5rem">Alerts Sent Today</div>
+        <div style="display:flex;gap:.5rem;align-items:center">
+          <div style="flex:1">
+            <div class="progress-bar"><div class="progress-fill" style="width:62%;background:linear-gradient(90deg,var(--purple),var(--blue))"></div></div>
+          </div>
+          <span style="font-family:var(--font-mono);font-size:.78rem;font-weight:600">31 / 50</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── Sentiment Chart Row ─────────────────────────────── -->
+  <section class="grid-main">
+    <div class="card">
+      <div class="card-header">
+        <span class="card-title">Call vs Put Flow</span>
+        <span class="card-badge badge-demo">Intraday</span>
+      </div>
+      <div class="chart-container" style="height:260px"><canvas id="sentimentChart"></canvas></div>
+    </div>
+    <div class="card">
+      <div class="card-header">
+        <span class="card-title">Signal Distribution</span>
+        <span class="card-badge badge-demo">Today</span>
+      </div>
+      <div class="chart-container" style="height:260px"><canvas id="distChart"></canvas></div>
+    </div>
+  </section>
+
+  <footer>
+    Options Flow Scanner &mdash; Real-time unusual options activity detection &mdash; Powered by Polygon.io
+  </footer>
+</div>
+
+<!-- ── JavaScript ─────────────────────────────────────────── -->
+<script>
+(function() {
+'use strict';
+
+/* ── Demo Data ───────────────────────────────────────────── */
+const SIGNALS = [
+  {
+    ticker:'AAPL', price:189.42, change:+2.31, changePct:+1.23,
+    type:'Sweep', sentiment:'bullish', risk:4,
+    volume:'8.2M', oi:'142K', avgVol:'1.4M', volMult:'5.8x',
+    premium:'$4.2M', strike:'$190C', exp:'03/21'
+  },
+  {
+    ticker:'TSLA', price:248.76, change:-5.18, changePct:-2.04,
+    type:'Unusual Vol', sentiment:'bearish', risk:5,
+    volume:'12.4M', oi:'89K', avgVol:'2.1M', volMult:'5.9x',
+    premium:'$8.7M', strike:'$240P', exp:'02/28'
+  },
+  {
+    ticker:'NVDA', price:721.33, change:+15.67, changePct:+2.22,
+    type:'Block Trade', sentiment:'bullish', risk:4,
+    volume:'6.1M', oi:'201K', avgVol:'950K', volMult:'6.4x',
+    premium:'$12.1M', strike:'$730C', exp:'03/14'
+  },
+  {
+    ticker:'SPY', price:502.18, change:+1.04, changePct:+0.21,
+    type:'Split Strike', sentiment:'neutral', risk:3,
+    volume:'28.3M', oi:'1.2M', avgVol:'5.6M', volMult:'5.1x',
+    premium:'$22.5M', strike:'$505C', exp:'02/21'
+  }
+];
+
+const FLOW_DATA = [
+  {time:'15:42:18',ticker:'AAPL',type:'Call',strike:'$190',exp:'03/21',premium:'$1.2M',vol:'24,500',oi:'8,200',voloi:'2.99',signal:'Sweep',score:4,sent:72},
+  {time:'15:38:04',ticker:'TSLA',type:'Put',strike:'$240',exp:'02/28',premium:'$3.4M',vol:'18,700',oi:'3,100',voloi:'6.03',signal:'Unusual',score:5,sent:18},
+  {time:'15:31:55',ticker:'NVDA',type:'Call',strike:'$730',exp:'03/14',premium:'$2.8M',vol:'12,300',oi:'4,800',voloi:'2.56',signal:'Block',score:4,sent:81},
+  {time:'15:27:33',ticker:'SPY',type:'Call',strike:'$505',exp:'02/21',premium:'$890K',vol:'45,200',oi:'12,400',voloi:'3.65',signal:'Split',score:3,sent:55},
+  {time:'15:22:10',ticker:'AAPL',type:'Put',strike:'$185',exp:'03/07',premium:'$420K',vol:'8,900',oi:'5,600',voloi:'1.59',signal:'Unusual',score:3,sent:35},
+  {time:'15:18:47',ticker:'NVDA',type:'Call',strike:'$750',exp:'04/18',premium:'$5.1M',vol:'9,200',oi:'1,400',voloi:'6.57',signal:'Sweep',score:5,sent:88},
+  {time:'15:12:29',ticker:'TSLA',type:'Call',strike:'$260',exp:'03/21',premium:'$1.8M',vol:'15,400',oi:'6,700',voloi:'2.30',signal:'Block',score:3,sent:62},
+  {time:'15:05:53',ticker:'SPY',type:'Put',strike:'$498',exp:'02/14',premium:'$2.2M',vol:'32,100',oi:'9,800',voloi:'3.28',signal:'Unusual',score:4,sent:28},
+  {time:'14:58:11',ticker:'AAPL',type:'Call',strike:'$195',exp:'04/18',premium:'$3.6M',vol:'19,800',oi:'2,500',voloi:'7.92',signal:'Sweep',score:5,sent:91},
+  {time:'14:51:36',ticker:'TSLA',type:'Put',strike:'$235',exp:'02/21',premium:'$780K',vol:'11,200',oi:'4,300',voloi:'2.60',signal:'Unusual',score:3,sent:22},
+];
+
+const PATTERNS = [
+  {name:'Dark Pool Accumulation',desc:'Large block trades detected across multiple strikes in NVDA, consistent with institutional accumulation patterns.',freq:'12 today',accuracy:'74%',level:'high'},
+  {name:'Sweep Cluster Alert',desc:'Rapid sequential sweep orders in AAPL $190C, indicating aggressive directional positioning before earnings.',freq:'8 today',accuracy:'68%',level:'high'},
+  {name:'Put Wall Formation',desc:'Heavy put open interest building at TSLA $240 strike, creating potential support/resistance level.',freq:'5 today',accuracy:'61%',level:'medium'},
+  {name:'Gamma Exposure Shift',desc:'SPY dealer gamma flipping from positive to negative near $502, suggesting increased volatility ahead.',freq:'3 today',accuracy:'57%',level:'medium'},
+  {name:'Unusual Expiry Skew',desc:'Disproportionate volume in near-term TSLA puts vs calls, skew deviation exceeds 2 standard deviations.',freq:'2 today',accuracy:'52%',level:'low'},
+];
+
+/* ── Render Signal Cards ─────────────────────────────────── */
+function renderSignalCards() {
+  const container = document.getElementById('signalCards');
+  const typeClasses = {'Sweep':'tag-sweep','Unusual Vol':'tag-unusual','Block Trade':'tag-block','Split Strike':'tag-split'};
+  container.innerHTML = SIGNALS.map(s => {
+    const dir = s.change >= 0 ? 'up' : 'down';
+    const sentClass = s.sentiment === 'bullish' ? 'bullish' : s.sentiment === 'bearish' ? 'bearish' : 'neutral';
+    const sign = s.change >= 0 ? '+' : '';
+    const riskBars = Array.from({length:5},(_,i) => {
+      let cls = '';
+      if(i < s.risk) cls = s.risk <= 2 ? 'active-green' : s.risk <= 3 ? 'active-amber' : 'active-red';
+      return `<span class="${cls}"></span>`;
+    }).join('');
+    return `
+      <div class="card signal-card ${sentClass}">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start">
+          <div>
+            <div class="signal-ticker">${s.ticker}</div>
+            <div class="signal-price">$${s.price.toFixed(2)}</div>
+            <div class="signal-change ${dir}">${sign}${s.change.toFixed(2)} (${sign}${s.changePct.toFixed(2)}%)</div>
+          </div>
+          <div style="text-align:right">
+            <div class="risk-score"><span style="font-size:.65rem;color:var(--text-muted)">Risk</span><div class="risk-bar">${riskBars}</div></div>
+            <div class="signal-type-tag ${typeClasses[s.type] || ''}">${s.type}</div>
+          </div>
+        </div>
+        <div class="signal-meta">
+          <div class="signal-meta-item"><span class="signal-meta-label">Volume</span><span class="signal-meta-value">${s.volume}</span></div>
+          <div class="signal-meta-item"><span class="signal-meta-label">Premium</span><span class="signal-meta-value">${s.premium}</span></div>
+          <div class="signal-meta-item"><span class="signal-meta-label">Vol Mult</span><span class="signal-meta-value" style="color:var(--cyan)">${s.volMult}</span></div>
+          <div class="signal-meta-item"><span class="signal-meta-label">Target</span><span class="signal-meta-value">${s.strike} ${s.exp}</span></div>
+        </div>
+      </div>`;
+  }).join('');
+}
+
+/* ── Render Flow Table ───────────────────────────────────── */
+function renderFlowTable() {
+  const tbody = document.getElementById('flowBody');
+  tbody.innerHTML = FLOW_DATA.map(f => {
+    const typeClass = f.type === 'Call' ? 'call' : 'put';
+    const sentColor = f.sent > 50 ? 'var(--green)' : 'var(--red)';
+    const riskBars = Array.from({length:5},(_,i) => {
+      let cls = '';
+      if(i < f.score) cls = f.score <= 2 ? 'active-green' : f.score <= 3 ? 'active-amber' : 'active-red';
+      return `<span class="${cls}"></span>`;
+    }).join('');
+    return `<tr>
+      <td>${f.time}</td><td style="color:var(--text-primary);font-weight:600">${f.ticker}</td>
+      <td class="${typeClass}">${f.type}</td><td>${f.strike}</td><td>${f.exp}</td>
+      <td>${f.premium}</td><td>${f.vol}</td><td>${f.oi}</td>
+      <td style="color:${parseFloat(f.voloi)>3?'var(--amber)':'var(--text-secondary)'}">${f.voloi}</td>
+      <td>${f.signal}</td>
+      <td><div class="risk-bar">${riskBars}</div></td>
+      <td><div class="sentiment-bar"><div class="sentiment-fill" style="width:${f.sent}%;background:${sentColor}"></div></div> ${f.sent}%</td>
+    </tr>`;
+  }).join('');
+}
+
+/* ── Render Patterns ─────────────────────────────────────── */
+function renderPatterns() {
+  const container = document.getElementById('patternList');
+  container.innerHTML = PATTERNS.map(p => `
+    <div class="pattern-item ${p.level}">
+      <div class="pattern-name">${p.name}</div>
+      <div class="pattern-desc">${p.desc}</div>
+      <div class="pattern-stats">
+        <div class="pattern-stat"><span class="label">Freq:</span><span class="value">${p.freq}</span></div>
+        <div class="pattern-stat"><span class="label">Accuracy:</span><span class="value" style="color:var(--green)">${p.accuracy}</span></div>
+        <div class="pattern-stat"><span class="label">Confidence:</span><span class="value">${p.level}</span></div>
+      </div>
+    </div>
+  `).join('');
+}
+
+/* ── Chart.js Setup ──────────────────────────────────────── */
+const CHART_DEFAULTS = {
+  responsive: true, maintainAspectRatio: false,
+  plugins: {legend:{labels:{color:'#94a3b8',font:{size:11}}},tooltip:{backgroundColor:'#1a2235',borderColor:'#2a3550',borderWidth:1,titleColor:'#e2e8f0',bodyColor:'#94a3b8'}},
+  scales: {
+    x:{ticks:{color:'#64748b',font:{size:10}},grid:{color:'rgba(42,53,80,0.5)'}},
+    y:{ticks:{color:'#64748b',font:{size:10}},grid:{color:'rgba(42,53,80,0.5)'}}
+  }
+};
+
+const timeLabels = ['9:30','10:00','10:30','11:00','11:30','12:00','12:30','13:00','13:30','14:00','14:30','15:00','15:30'];
+
+const chartDataSets = {
+  volume: {
+    datasets: [
+      {label:'AAPL',data:[1200,1800,2400,1900,3200,2100,1700,2800,3600,4100,3800,5200,8200],borderColor:'#3b82f6',backgroundColor:'rgba(59,130,246,.1)',fill:true,tension:.3},
+      {label:'TSLA',data:[2100,3400,4200,3800,5100,4600,3200,4800,6200,7400,8900,10200,12400],borderColor:'#ef4444',backgroundColor:'rgba(239,68,68,.1)',fill:true,tension:.3},
+      {label:'NVDA',data:[800,1200,1900,1500,2200,1800,2400,3100,3800,4200,4800,5400,6100],borderColor:'#22c55e',backgroundColor:'rgba(34,197,94,.1)',fill:true,tension:.3},
+      {label:'SPY',data:[5600,8200,10400,9800,12100,11200,9800,14200,18400,21200,24100,26300,28300],borderColor:'#f59e0b',backgroundColor:'rgba(245,158,11,.1)',fill:true,tension:.3}
+    ]
+  },
+  oi: {
+    datasets: [
+      {label:'AAPL',data:[142,142,143,144,144,145,145,146,147,148,148,149,150].map(v=>v*1000),borderColor:'#3b82f6',tension:.3,fill:false},
+      {label:'TSLA',data:[89,89,88,87,86,86,87,88,89,90,91,91,92].map(v=>v*1000),borderColor:'#ef4444',tension:.3,fill:false},
+      {label:'NVDA',data:[201,202,203,205,206,208,209,210,212,214,216,218,220].map(v=>v*1000),borderColor:'#22c55e',tension:.3,fill:false},
+      {label:'SPY',data:[1200,1205,1210,1208,1215,1220,1218,1225,1230,1228,1235,1240,1245].map(v=>v*1000),borderColor:'#f59e0b',tension:.3,fill:false}
+    ]
+  },
+  premium: {
+    datasets: [
+      {label:'AAPL',data:[420,680,1100,890,1400,1050,780,1600,2200,2800,3200,3800,4200].map(v=>v*1000),borderColor:'#3b82f6',backgroundColor:'rgba(59,130,246,.15)',fill:true,tension:.4},
+      {label:'TSLA',data:[890,1400,2100,1800,2600,2200,1500,3200,4100,5200,6400,7800,8700].map(v=>v*1000),borderColor:'#ef4444',backgroundColor:'rgba(239,68,68,.15)',fill:true,tension:.4},
+      {label:'NVDA',data:[600,1100,1800,1400,2400,1900,2200,3800,5100,7200,9200,10800,12100].map(v=>v*1000),borderColor:'#22c55e',backgroundColor:'rgba(34,197,94,.15)',fill:true,tension:.4},
+      {label:'SPY',data:[2200,4100,6800,5400,8200,7100,5800,10200,14100,17400,19800,21200,22500].map(v=>v*1000),borderColor:'#f59e0b',backgroundColor:'rgba(245,158,11,.15)',fill:true,tension:.4}
+    ]
+  }
+};
+
+let mainChart;
+function createMainChart(type) {
+  if(mainChart) mainChart.destroy();
+  const cfg = JSON.parse(JSON.stringify(CHART_DEFAULTS));
+  if(type === 'premium' || type === 'oi') {
+    cfg.scales.y.ticks.callback = function(v){return '$'+(v/1000).toFixed(0)+'K';};
+  }
+  mainChart = new Chart(document.getElementById('mainChart'), {
+    type:'line', data:{labels:timeLabels, datasets:chartDataSets[type].datasets.map(d=>({...d}))}, options:cfg
+  });
+}
+
+/* ── Chart Tabs ──────────────────────────────────────────── */
+document.getElementById('chartTabs').addEventListener('click', function(e) {
+  if(!e.target.classList.contains('chart-tab')) return;
+  this.querySelectorAll('.chart-tab').forEach(t=>t.classList.remove('active'));
+  e.target.classList.add('active');
+  createMainChart(e.target.dataset.chart);
+});
+
+/* ── Sentiment Chart ─────────────────────────────────────── */
+function createSentimentChart() {
+  const callData = [12,18,22,15,28,21,17,25,31,35,29,38,42];
+  const putData =  [8,14,16,19,12,18,22,14,18,22,26,21,24];
+  new Chart(document.getElementById('sentimentChart'), {
+    type:'bar', data:{labels:timeLabels, datasets:[
+      {label:'Calls',data:callData,backgroundColor:'rgba(34,197,94,.6)',borderRadius:3},
+      {label:'Puts',data:putData,backgroundColor:'rgba(239,68,68,.6)',borderRadius:3}
+    ]}, options:{...CHART_DEFAULTS,plugins:{...CHART_DEFAULTS.plugins,legend:{position:'top',labels:{color:'#94a3b8',font:{size:11},usePointStyle:true,pointStyle:'rect'}}},scales:{...CHART_DEFAULTS.scales,x:{...CHART_DEFAULTS.scales.x,stacked:false},y:{...CHART_DEFAULTS.scales.y,stacked:false}}}
+  });
+}
+
+/* ── Distribution Chart ──────────────────────────────────── */
+function createDistChart() {
+  new Chart(document.getElementById('distChart'), {
+    type:'doughnut', data:{
+      labels:['Sweeps','Unusual Volume','Block Trades','Split Strikes'],
+      datasets:[{data:[14,11,8,4],backgroundColor:['rgba(168,85,247,.7)','rgba(6,182,212,.7)','rgba(245,158,11,.7)','rgba(59,130,246,.7)'],borderColor:'#1a2235',borderWidth:2}]
+    }, options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'bottom',labels:{color:'#94a3b8',font:{size:11},padding:12,usePointStyle:true,pointStyle:'circle'}}}}
+  });
+}
+
+/* ── Backtest Chart ──────────────────────────────────────── */
+function createBacktestChart() {
+  const days = Array.from({length:30},(_,i)=>'Day '+(i+1));
+  const equity = [0];
+  for(let i=1;i<30;i++) equity.push(equity[i-1] + (Math.random()*3200 - 1200));
+  new Chart(document.getElementById('backtestChart'), {
+    type:'line', data:{labels:days, datasets:[{
+      label:'Equity Curve',data:equity,
+      borderColor:'#06b6d4',backgroundColor:'rgba(6,182,212,.1)',fill:true,tension:.4,pointRadius:0,borderWidth:2
+    }]}, options:{...CHART_DEFAULTS,plugins:{legend:{display:false}},scales:{x:{display:false},y:{ticks:{color:'#64748b',font:{size:9},callback:v=>'$'+v.toFixed(0)},grid:{color:'rgba(42,53,80,0.3)'}}}}
+  });
+}
+
+/* ── Clock ───────────────────────────────────────────────── */
+function updateClock() {
+  const now = new Date();
+  const et = new Date(now.toLocaleString('en-US',{timeZone:'America/New_York'}));
+  const h = et.getHours(), m = et.getMinutes(), s = et.getSeconds();
+  document.getElementById('clock').textContent =
+    `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')} ET`;
+  const mins = h*60+m;
+  const isOpen = mins >= 570 && mins < 960 && et.getDay()>0 && et.getDay()<6;
+  const statusEl = document.getElementById('marketStatus');
+  const dot = document.querySelector('.status-dot');
+  if(isOpen){statusEl.textContent='MARKET OPEN';dot.style.background='var(--green)';dot.style.boxShadow='0 0 6px var(--green)';}
+  else{statusEl.textContent='MARKET CLOSED';dot.style.background='var(--red)';dot.style.boxShadow='0 0 6px var(--red)';dot.style.animation='none';}
+  document.getElementById('lastScan').textContent =
+    `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`;
+}
+
+/* ── Init ────────────────────────────────────────────────── */
+renderSignalCards();
+renderFlowTable();
+renderPatterns();
+createMainChart('volume');
+createSentimentChart();
+createDistChart();
+createBacktestChart();
+updateClock();
+setInterval(updateClock, 1000);
+
+})();
+</script>
+</body>
+</html>
