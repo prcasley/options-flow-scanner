@@ -42,13 +42,14 @@ US_MARKET_HOLIDAYS: set[date] = {
 class Scanner:
     def __init__(self, config: dict, polygon: PolygonClient,
                  detector: Detector, alerts: AlertManager,
-                 db: SignalDatabase, health=None):
+                 db: SignalDatabase, health=None, dispatcher=None):
         self.config = config
         self.polygon = polygon
         self.detector = detector
         self.alerts = alerts
         self.db = db
         self.health = health
+        self.dispatcher = dispatcher
         self._running = False
         self._daily_summary_sent_date: str | None = None  # "YYYY-MM-DD" of last summary
         self._et = pytz.timezone(config.get("market", {}).get("timezone", "US/Eastern"))
@@ -143,6 +144,8 @@ class Scanner:
                              reverse=True)
             logger.info("Found %d signals this cycle", len(all_signals))
             await self.alerts.send_signals(all_signals)
+            if self.dispatcher:
+                await self.dispatcher.dispatch_signals(all_signals)
             await self.db.insert_signals(all_signals)
         else:
             logger.info("No signals this cycle")

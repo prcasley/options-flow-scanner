@@ -12,6 +12,8 @@ import yaml
 from dotenv import load_dotenv
 
 from scanner.alerts import AlertManager
+from scanner.channels import DiscordChannel, SlackChannel, MultiChannelDispatcher
+from scanner.dashboard import DashboardServer
 from scanner.database import SignalDatabase
 from scanner.detector import Detector
 from scanner.health import HealthServer
@@ -158,7 +160,20 @@ async def main():
         port=health_cfg.get("port", 8080),
     )
 
-    scanner = Scanner(config, polygon, detector, alerts, db, health=health)
+    # Multi-channel alert dispatcher
+    dispatcher = MultiChannelDispatcher()
+    if webhook_url:
+        dispatcher.add_channel(DiscordChannel(webhook_url))
+    slack_url = os.getenv("SLACK_WEBHOOK_URL", "")
+    if slack_url:
+        dispatcher.add_channel(SlackChannel(slack_url))
+        logger.info("Slack alerts enabled")
+
+    # Web dashboard
+    dashboard = DashboardServer(health, db)
+
+    scanner = Scanner(config, polygon, detector, alerts, db,
+                      health=health, dispatcher=dispatcher)
 
     # Graceful shutdown
     loop = asyncio.get_running_loop()
