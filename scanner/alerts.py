@@ -108,5 +108,7 @@ class AlertManager:
             with open(self.csv_path, "a", newline="") as f:
                 writer = csv.writer(f)
                 writer.writerow(signal.to_csv_row())
+                f.flush()
+                os.fsync(f.fileno())
         except Exception as e:
             logger.error("Failed to write CSV: %s", e)

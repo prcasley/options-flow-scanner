@@ -1,0 +1,29 @@
+version: "3.9"
+
+services:
+  scanner:
+    build: .
+    container_name: options-flow-scanner
+    restart: unless-stopped
+    env_file:
+      - .env
+    volumes:
+      - scanner-data:/app/data
+      - ./config.yaml:/app/config.yaml:ro
+    ports:
+      - "8080:8080"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8080/health')"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+volumes:
+  scanner-data:
+    driver: local
