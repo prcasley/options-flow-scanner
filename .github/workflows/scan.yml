@@ -1,0 +1,117 @@
+name: Options Flow Scanner
+
+on:
+  workflow_dispatch:
+
+env:
+  POLYGON_API_KEY: ${{ secrets.POLYGON_API_KEY }}
+  DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Restore signal database
+        uses: actions/cache@v4
+        with:
+          path: data/signals.db
+          key: signals-db-${{ github.run_number }}
+          restore-keys: |
+            signals-db-
+
+      - name: Run scanner (single cycle)
+        run: |
+          python -c "
+          import asyncio
+          import os
+          import logging
+          from pathlib import Path
+
+          import yaml
+          from dotenv import load_dotenv
+
+          from scanner.polygon_client import PolygonClient
+          from scanner.detector import Detector
+          from scanner.alerts import AlertManager
+          from scanner.database import SignalDatabase
+          from scanner.scheduler import Scanner
+
+          load_dotenv(Path('.env'), override=False)
+
+          logging.basicConfig(
+              level=logging.INFO,
+              format='%(asctime)s [%(levelname)s] %(name)s: %(message)s',
+          )
+          logger = logging.getLogger('github-action')
+
+          async def single_scan():
+              with open('config.yaml') as f:
+                  config = yaml.safe_load(f)
+
+              api_key = os.getenv('POLYGON_API_KEY')
+              if not api_key:
+                  logger.error('POLYGON_API_KEY not set in GitHub Secrets')
+                  return
+
+              webhook_url = os.getenv('DISCORD_WEBHOOK_URL', '')
+              if not webhook_url:
+                  logger.warning('DISCORD_WEBHOOK_URL not set — Discord alerts disabled')
+
+              rate_cfg = config.get('rate_limit', {})
+              polygon = PolygonClient(
+                  api_key=api_key,
+                  rate_limit_cpm=rate_cfg.get('calls_per_minute', 5),
+                  max_retries=rate_cfg.get('max_retries', 3),
+                  retry_delay=rate_cfg.get('retry_delay_seconds', 15),
+              )
+
+              detector = Detector(config)
+              alerts = AlertManager(
+                  webhook_url=webhook_url,
+                  csv_path=config.get('csv_log_path', 'data/alerts.csv'),
+              )
+              db = SignalDatabase(config.get('db_path', 'data/signals.db'))
+              await db.initialize()
+
+              scanner = Scanner(config, polygon, detector, alerts, db)
+
+              logger.info('Running single scan cycle via GitHub Actions')
+              await scanner._scan_cycle()
+              logger.info('Scan cycle complete')
+
+              await polygon.close()
+              await db.close()
+
+          asyncio.run(single_scan())
+          "
+        timeout-minutes: 5
+
+      - name: Upload signals database
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: signals-db-${{ github.run_number }}
+          path: data/signals.db
+          retention-days: 30
+
+      - name: Upload alerts CSV
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: alerts-${{ github.run_number }}
+          path: data/alerts.csv
+          retention-days: 30
+          if-no-files-found: ignore
