@@ -18,6 +18,7 @@ class AlertManager:
     def __init__(self, webhook_url: str, csv_path: str):
         self.webhook_url = webhook_url
         self.csv_path = csv_path
+        self._session: aiohttp.ClientSession | None = None
         self._ensure_csv()
 
     def _ensure_csv(self):
@@ -78,6 +79,17 @@ class AlertManager:
             )
         return "\n".join(lines)
 
+    async def _get_session(self) -> aiohttp.ClientSession:
+        if self._session is None or self._session.closed:
+            self._session = aiohttp.ClientSession(
+                timeout=aiohttp.ClientTimeout(total=10)
+            )
+        return self._session
+
+    async def close(self):
+        if self._session and not self._session.closed:
+            await self._session.close()
+
     async def _post_discord(self, content: str):
         if not self.webhook_url:
             logger.warning("No Discord webhook URL configured, skipping alert")
@@ -88,18 +100,17 @@ class AlertManager:
             content = content[:1990] + "..."
 
         try:
-            async with aiohttp.ClientSession() as session:
-                async with session.post(
-                    self.webhook_url,
-                    json={"content": content},
-                    timeout=aiohttp.ClientTimeout(total=10),
-                ) as resp:
-                    if resp.status == 204:
-                        logger.debug("Discord alert sent")
-                    else:
-                        text = await resp.text()
-                        logger.error("Discord webhook error %d: %s",
-                                     resp.status, text[:200])
+            session = await self._get_session()
+            async with session.post(
+                self.webhook_url,
+                json={"content": content},
+            ) as resp:
+                if resp.status == 204:
+                    logger.debug("Discord alert sent")
+                else:
+                    text = await resp.text()
+                    logger.error("Discord webhook error %d: %s",
+                                 resp.status, text[:200])
         except Exception as e:
             logger.error("Failed to send Discord alert: %s", e)
 

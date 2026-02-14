@@ -18,7 +18,7 @@ class YFinanceClient:
 
     async def get_options_snapshot(self, ticker: str) -> list[dict]:
         """Get options chain for a ticker, formatted like Polygon snapshots."""
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         try:
             result = await loop.run_in_executor(
                 self._executor, self._fetch_options_sync, ticker
