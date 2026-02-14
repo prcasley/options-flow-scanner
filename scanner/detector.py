@@ -166,22 +166,23 @@ class Detector:
 
     def _build_description(self, c: OptionsContract, vol_ratio: float,
                            premium: float, signal_types: list[str]) -> str:
-        sig = Signal(
-            timestamp=datetime.now(),
-            ticker=c.ticker,
-            strike=c.strike,
-            expiry=c.expiry,
-            contract_type=c.contract_type,
-            volume=c.volume,
-            open_interest=c.open_interest,
-            estimated_premium=premium,
-            risk_score=0,
-            signal_types=signal_types,
-            volume_ratio=vol_ratio,
-        )
-        parts = [sig.contract_label, "\u2014"]
+        # Format contract label inline instead of creating a throwaway Signal
+        exp = datetime.strptime(c.expiry, "%Y-%m-%d")
+        exp_str = f"{exp.month}/{exp.day}"
+        side = "C" if c.contract_type == "call" else "P"
+        strike_str = f"{c.strike:g}"
+        label = f"{c.ticker} {strike_str}{side} {exp_str}"
+
+        if premium >= 1_000_000:
+            prem_str = f"${premium / 1_000_000:.1f}M"
+        elif premium >= 1_000:
+            prem_str = f"${premium / 1_000:.0f}K"
+        else:
+            prem_str = f"${premium:.0f}"
+
+        parts = [label, "\u2014"]
         if vol_ratio > 1:
             parts.append(f"{vol_ratio:.0f}x avg volume,")
-        parts.append(f"{sig.premium_str} premium,")
+        parts.append(f"{prem_str} premium,")
         parts.append(", ".join(signal_types))
         return " ".join(parts)

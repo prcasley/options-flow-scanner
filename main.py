@@ -100,6 +100,7 @@ async def main():
 
     # Cleanup
     await polygon.close()
+    await alerts.close()
     await db.close()
     logger.info("Shutdown complete.")
 
