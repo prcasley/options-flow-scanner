@@ -1,0 +1,757 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Options Flow Scanner</title>
+    <style>
+        :root {
+            --bg: #0d1117;
+            --surface: #161b22;
+            --border: #30363d;
+            --text: #e6edf3;
+            --text-muted: #8b949e;
+            --accent: #58a6ff;
+            --green: #3fb950;
+            --red: #f85149;
+            --orange: #d29922;
+            --yellow: #e3b341;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            line-height: 1.5;
+        }
+
+        .header {
+            background: var(--surface);
+            border-bottom: 1px solid var(--border);
+            padding: 16px 24px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .header h1 {
+            font-size: 20px;
+            font-weight: 600;
+        }
+
+        .header h1 span { color: var(--accent); }
+
+        .header-right {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .status-dot {
+            width: 8px; height: 8px;
+            border-radius: 50%;
+            background: var(--green);
+            display: inline-block;
+        }
+
+        .status-dot.offline { background: var(--text-muted); }
+
+        .auto-refresh-label {
+            font-size: 13px;
+            color: var(--text-muted);
+        }
+
+        .container { max-width: 1400px; margin: 0 auto; padding: 20px 24px; }
+
+        /* Stats Cards */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 16px;
+            margin-bottom: 24px;
+        }
+
+        .stat-card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 16px 20px;
+        }
+
+        .stat-card .label {
+            font-size: 12px;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 4px;
+        }
+
+        .stat-card .value {
+            font-size: 28px;
+            font-weight: 700;
+        }
+
+        .stat-card .sub {
+            font-size: 12px;
+            color: var(--text-muted);
+            margin-top: 2px;
+        }
+
+        .value.green { color: var(--green); }
+        .value.red { color: var(--red); }
+        .value.accent { color: var(--accent); }
+        .value.orange { color: var(--orange); }
+
+        /* Main layout */
+        .main-grid {
+            display: grid;
+            grid-template-columns: 1fr 340px;
+            gap: 20px;
+        }
+
+        @media (max-width: 1024px) {
+            .main-grid { grid-template-columns: 1fr; }
+        }
+
+        /* Panels */
+        .panel {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            overflow: hidden;
+        }
+
+        .panel-header {
+            padding: 12px 16px;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .panel-header h2 {
+            font-size: 14px;
+            font-weight: 600;
+        }
+
+        .panel-body { padding: 0; }
+        .panel-body.padded { padding: 16px; }
+
+        /* Filters */
+        .filters {
+            display: flex;
+            gap: 10px;
+            padding: 12px 16px;
+            border-bottom: 1px solid var(--border);
+            flex-wrap: wrap;
+        }
+
+        .filters select, .filters input {
+            background: var(--bg);
+            border: 1px solid var(--border);
+            color: var(--text);
+            padding: 6px 10px;
+            border-radius: 6px;
+            font-size: 13px;
+        }
+
+        .filters select:focus, .filters input:focus {
+            outline: none;
+            border-color: var(--accent);
+        }
+
+        /* Signals Table */
+        .signals-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 13px;
+        }
+
+        .signals-table th {
+            text-align: left;
+            padding: 10px 12px;
+            font-size: 11px;
+            text-transform: uppercase;
+            color: var(--text-muted);
+            letter-spacing: 0.5px;
+            border-bottom: 1px solid var(--border);
+            position: sticky;
+            top: 0;
+            background: var(--surface);
+        }
+
+        .signals-table td {
+            padding: 10px 12px;
+            border-bottom: 1px solid var(--border);
+            white-space: nowrap;
+        }
+
+        .signals-table tr:hover td {
+            background: rgba(88, 166, 255, 0.04);
+        }
+
+        .table-scroll {
+            max-height: 520px;
+            overflow-y: auto;
+        }
+
+        /* Risk badge */
+        .risk-badge {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-weight: 600;
+            font-size: 12px;
+        }
+
+        .risk-1 { background: rgba(139,148,158,0.2); color: #8b949e; }
+        .risk-2 { background: rgba(63,185,80,0.15); color: #3fb950; }
+        .risk-3 { background: rgba(227,179,65,0.15); color: #e3b341; }
+        .risk-4 { background: rgba(210,153,34,0.2); color: #d29922; }
+        .risk-5 { background: rgba(248,81,73,0.15); color: #f85149; }
+
+        /* Type badge */
+        .type-badge {
+            display: inline-block;
+            padding: 1px 6px;
+            border-radius: 4px;
+            font-size: 11px;
+            font-weight: 500;
+        }
+
+        .type-call { background: rgba(63,185,80,0.15); color: var(--green); }
+        .type-put { background: rgba(248,81,73,0.15); color: var(--red); }
+
+        /* Signal type tags */
+        .signal-tag {
+            display: inline-block;
+            padding: 1px 6px;
+            border-radius: 4px;
+            font-size: 10px;
+            background: rgba(88,166,255,0.1);
+            color: var(--accent);
+            margin-right: 4px;
+            margin-bottom: 2px;
+        }
+
+        /* Sidebar sections */
+        .sidebar-section { margin-bottom: 20px; }
+
+        /* Risk distribution bar */
+        .risk-bars { padding: 4px 0; }
+
+        .risk-bar-row {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 6px;
+            font-size: 13px;
+        }
+
+        .risk-bar-label {
+            width: 60px;
+            text-align: right;
+            color: var(--text-muted);
+            font-size: 12px;
+        }
+
+        .risk-bar-track {
+            flex: 1;
+            height: 18px;
+            background: var(--bg);
+            border-radius: 4px;
+            overflow: hidden;
+        }
+
+        .risk-bar-fill {
+            height: 100%;
+            border-radius: 4px;
+            transition: width 0.4s ease;
+        }
+
+        .risk-bar-count {
+            width: 30px;
+            font-size: 12px;
+            color: var(--text-muted);
+        }
+
+        /* Call/Put ratio bar */
+        .ratio-bar {
+            display: flex;
+            height: 28px;
+            border-radius: 6px;
+            overflow: hidden;
+            margin: 8px 0;
+        }
+
+        .ratio-calls {
+            background: var(--green);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+            font-weight: 600;
+            color: #000;
+            transition: width 0.4s ease;
+        }
+
+        .ratio-puts {
+            background: var(--red);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+            font-weight: 600;
+            color: #fff;
+            transition: width 0.4s ease;
+        }
+
+        .ratio-labels {
+            display: flex;
+            justify-content: space-between;
+            font-size: 12px;
+            color: var(--text-muted);
+        }
+
+        /* Top tickers */
+        .ticker-list { list-style: none; }
+
+        .ticker-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 6px 0;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .ticker-item:last-child { border-bottom: none; }
+
+        .ticker-name {
+            font-weight: 600;
+            font-size: 13px;
+        }
+
+        .ticker-stats {
+            font-size: 12px;
+            color: var(--text-muted);
+        }
+
+        /* Watchlist */
+        .watchlist-tags {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+        }
+
+        .watchlist-tag {
+            background: var(--bg);
+            border: 1px solid var(--border);
+            padding: 3px 10px;
+            border-radius: 14px;
+            font-size: 12px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: border-color 0.2s;
+        }
+
+        .watchlist-tag:hover {
+            border-color: var(--accent);
+            color: var(--accent);
+        }
+
+        .watchlist-tag.active {
+            border-color: var(--accent);
+            background: rgba(88,166,255,0.1);
+            color: var(--accent);
+        }
+
+        /* Empty state */
+        .empty-state {
+            text-align: center;
+            padding: 60px 20px;
+            color: var(--text-muted);
+        }
+
+        .empty-state .icon { font-size: 48px; margin-bottom: 12px; }
+        .empty-state h3 { margin-bottom: 8px; color: var(--text); }
+
+        /* Format premium */
+        .premium { color: var(--green); font-weight: 500; }
+
+        /* Scrollbar */
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: var(--bg); }
+        ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1><span>&#9672;</span> Options Flow Scanner</h1>
+        <div class="header-right">
+            <span class="auto-refresh-label">
+                <input type="checkbox" id="autoRefresh" checked>
+                Auto-refresh (30s)
+            </span>
+            <span class="status-dot" id="statusDot" title="Dashboard active"></span>
+        </div>
+    </div>
+
+    <div class="container">
+        <!-- Stats Cards -->
+        <div class="stats-grid">
+            <div class="stat-card">
+                <div class="label">Today's Signals</div>
+                <div class="value accent" id="totalSignals">--</div>
+                <div class="sub" id="allTimeTotal">all time: --</div>
+            </div>
+            <div class="stat-card">
+                <div class="label">High Risk (4-5)</div>
+                <div class="value red" id="highRiskCount">--</div>
+                <div class="sub">signals requiring attention</div>
+            </div>
+            <div class="stat-card">
+                <div class="label">Total Premium</div>
+                <div class="value green" id="totalPremium">--</div>
+                <div class="sub">estimated flow volume</div>
+            </div>
+            <div class="stat-card">
+                <div class="label">Call / Put Ratio</div>
+                <div class="value orange" id="callPutRatio">--</div>
+                <div class="sub" id="callPutDetail">calls: -- | puts: --</div>
+            </div>
+        </div>
+
+        <!-- Main Grid -->
+        <div class="main-grid">
+            <!-- Signals Table -->
+            <div class="panel">
+                <div class="panel-header">
+                    <h2>Signal Feed</h2>
+                    <span style="font-size:12px;color:var(--text-muted)" id="signalCount"></span>
+                </div>
+                <div class="filters">
+                    <select id="filterTicker">
+                        <option value="">All Tickers</option>
+                        {% for t in watchlist %}
+                        <option value="{{ t }}">{{ t }}</option>
+                        {% endfor %}
+                    </select>
+                    <select id="filterRisk">
+                        <option value="">All Risk</option>
+                        <option value="5">Risk 5 only</option>
+                        <option value="4">Risk 4+</option>
+                        <option value="3">Risk 3+</option>
+                    </select>
+                    <select id="filterType">
+                        <option value="">Calls &amp; Puts</option>
+                        <option value="call">Calls only</option>
+                        <option value="put">Puts only</option>
+                    </select>
+                    <input type="date" id="filterDate" />
+                </div>
+                <div class="table-scroll" id="tableContainer">
+                    <table class="signals-table">
+                        <thead>
+                            <tr>
+                                <th>Time</th>
+                                <th>Ticker</th>
+                                <th>Contract</th>
+                                <th>Type</th>
+                                <th>Volume</th>
+                                <th>OI</th>
+                                <th>Premium</th>
+                                <th>Risk</th>
+                                <th>Signals</th>
+                            </tr>
+                        </thead>
+                        <tbody id="signalsBody">
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Sidebar -->
+            <div>
+                <!-- Risk Distribution -->
+                <div class="panel sidebar-section">
+                    <div class="panel-header"><h2>Risk Distribution</h2></div>
+                    <div class="panel-body padded">
+                        <div class="risk-bars" id="riskBars"></div>
+                    </div>
+                </div>
+
+                <!-- Call/Put Ratio -->
+                <div class="panel sidebar-section">
+                    <div class="panel-header"><h2>Call / Put Flow</h2></div>
+                    <div class="panel-body padded">
+                        <div class="ratio-bar" id="ratioBar"></div>
+                        <div class="ratio-labels">
+                            <span id="ratioCallLabel">Calls: 0</span>
+                            <span id="ratioPutLabel">Puts: 0</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Top Tickers -->
+                <div class="panel sidebar-section">
+                    <div class="panel-header"><h2>Top Tickers</h2></div>
+                    <div class="panel-body padded">
+                        <ul class="ticker-list" id="topTickers"></ul>
+                    </div>
+                </div>
+
+                <!-- Watchlist -->
+                <div class="panel sidebar-section">
+                    <div class="panel-header"><h2>Watchlist</h2></div>
+                    <div class="panel-body padded">
+                        <div class="watchlist-tags" id="watchlistTags">
+                            {% for t in watchlist %}
+                            <span class="watchlist-tag" onclick="filterByTicker('{{ t }}')">{{ t }}</span>
+                            {% endfor %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // State
+        let refreshTimer = null;
+        const today = new Date().toISOString().split('T')[0];
+        document.getElementById('filterDate').value = today;
+
+        // Format helpers
+        function formatPremium(val) {
+            if (val >= 1000000) return '$' + (val / 1000000).toFixed(1) + 'M';
+            if (val >= 1000) return '$' + (val / 1000).toFixed(0) + 'K';
+            return '$' + val.toFixed(0);
+        }
+
+        function formatTime(iso) {
+            const d = new Date(iso);
+            return d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true });
+        }
+
+        function formatNumber(n) {
+            return n.toLocaleString();
+        }
+
+        function contractLabel(sig) {
+            const exp = new Date(sig.expiry + 'T00:00:00');
+            const expStr = (exp.getMonth() + 1) + '/' + exp.getDate();
+            const side = sig.contract_type === 'call' ? 'C' : 'P';
+            const strike = parseFloat(sig.strike) % 1 === 0 ? parseInt(sig.strike) : sig.strike;
+            return strike + side + ' ' + expStr;
+        }
+
+        // Fetch and render
+        async function loadStats() {
+            const date = document.getElementById('filterDate').value || today;
+            try {
+                const res = await fetch('/api/stats?date=' + date);
+                const data = await res.json();
+
+                document.getElementById('totalSignals').textContent = data.total_signals;
+                document.getElementById('allTimeTotal').textContent = 'all time: ' + formatNumber(data.all_time_total || 0);
+                document.getElementById('highRiskCount').textContent = data.high_risk_count;
+                document.getElementById('totalPremium').textContent = formatPremium(data.total_premium);
+
+                // Call/Put ratio
+                const calls = data.calls_vs_puts.calls;
+                const puts = data.calls_vs_puts.puts;
+                const total = calls + puts;
+                if (total > 0) {
+                    const ratio = (calls / (puts || 1)).toFixed(2);
+                    document.getElementById('callPutRatio').textContent = ratio;
+                    document.getElementById('callPutDetail').textContent = 'calls: ' + calls + ' | puts: ' + puts;
+                } else {
+                    document.getElementById('callPutRatio').textContent = '--';
+                    document.getElementById('callPutDetail').textContent = 'calls: 0 | puts: 0';
+                }
+
+                // Risk bars
+                renderRiskBars(data.risk_distribution, data.total_signals);
+
+                // Ratio bar
+                renderRatioBar(calls, puts);
+
+                // Top tickers
+                renderTopTickers(data.top_tickers);
+            } catch (e) {
+                console.error('Stats error:', e);
+            }
+        }
+
+        async function loadSignals() {
+            const ticker = document.getElementById('filterTicker').value;
+            const risk = document.getElementById('filterRisk').value;
+            const type = document.getElementById('filterType').value;
+            const date = document.getElementById('filterDate').value;
+
+            let url = '/api/signals?limit=200';
+            if (ticker) url += '&ticker=' + ticker;
+            if (risk) url += '&risk_min=' + risk;
+            if (type) url += '&contract_type=' + type;
+            if (date) url += '&date=' + date;
+
+            try {
+                const res = await fetch(url);
+                const data = await res.json();
+
+                document.getElementById('signalCount').textContent =
+                    'Showing ' + data.signals.length + ' of ' + data.total;
+
+                renderSignals(data.signals);
+            } catch (e) {
+                console.error('Signals error:', e);
+            }
+        }
+
+        function renderSignals(signals) {
+            const tbody = document.getElementById('signalsBody');
+
+            if (!signals.length) {
+                tbody.innerHTML = `
+                    <tr><td colspan="9">
+                        <div class="empty-state">
+                            <div class="icon">&#128269;</div>
+                            <h3>No signals found</h3>
+                            <p>Signals will appear here when the scanner detects unusual options activity.<br>
+                            Make sure the scanner is running: <code>python main.py</code></p>
+                        </div>
+                    </td></tr>`;
+                return;
+            }
+
+            let html = '';
+            for (const s of signals) {
+                const typeClass = s.contract_type === 'call' ? 'type-call' : 'type-put';
+                const typeName = s.contract_type === 'call' ? 'CALL' : 'PUT';
+                const tags = (s.signal_types || '').split('|').map(
+                    t => '<span class="signal-tag">' + t.trim() + '</span>'
+                ).join('');
+
+                html += `<tr>
+                    <td>${formatTime(s.timestamp)}</td>
+                    <td><strong>${s.ticker}</strong></td>
+                    <td>${contractLabel(s)}</td>
+                    <td><span class="type-badge ${typeClass}">${typeName}</span></td>
+                    <td>${formatNumber(s.volume)}</td>
+                    <td>${formatNumber(s.open_interest)}</td>
+                    <td class="premium">${formatPremium(s.estimated_premium)}</td>
+                    <td><span class="risk-badge risk-${s.risk_score}">${s.risk_score}/5</span></td>
+                    <td>${tags}</td>
+                </tr>`;
+            }
+            tbody.innerHTML = html;
+        }
+
+        function renderRiskBars(dist, total) {
+            const container = document.getElementById('riskBars');
+            const colors = {
+                '1': '#8b949e', '2': '#3fb950', '3': '#e3b341',
+                '4': '#d29922', '5': '#f85149'
+            };
+            const labels = { '1': 'Low', '2': 'Moderate', '3': 'Elevated', '4': 'High', '5': 'Critical' };
+
+            let html = '';
+            for (let i = 1; i <= 5; i++) {
+                const count = dist[String(i)] || 0;
+                const pct = total > 0 ? (count / total * 100) : 0;
+                html += `
+                    <div class="risk-bar-row">
+                        <span class="risk-bar-label">${labels[i]}</span>
+                        <div class="risk-bar-track">
+                            <div class="risk-bar-fill" style="width:${pct}%;background:${colors[i]}"></div>
+                        </div>
+                        <span class="risk-bar-count">${count}</span>
+                    </div>`;
+            }
+            container.innerHTML = html;
+        }
+
+        function renderRatioBar(calls, puts) {
+            const total = calls + puts;
+            const bar = document.getElementById('ratioBar');
+            if (total === 0) {
+                bar.innerHTML = '<div class="ratio-calls" style="width:50%">0</div><div class="ratio-puts" style="width:50%">0</div>';
+            } else {
+                const callPct = (calls / total * 100).toFixed(1);
+                const putPct = (puts / total * 100).toFixed(1);
+                bar.innerHTML = `
+                    <div class="ratio-calls" style="width:${callPct}%">${callPct}%</div>
+                    <div class="ratio-puts" style="width:${putPct}%">${putPct}%</div>`;
+            }
+            document.getElementById('ratioCallLabel').textContent = 'Calls: ' + calls;
+            document.getElementById('ratioPutLabel').textContent = 'Puts: ' + puts;
+        }
+
+        function renderTopTickers(tickers) {
+            const ul = document.getElementById('topTickers');
+            if (!tickers.length) {
+                ul.innerHTML = '<li style="color:var(--text-muted);font-size:13px;padding:8px 0">No data yet</li>';
+                return;
+            }
+            let html = '';
+            for (const t of tickers) {
+                html += `
+                    <li class="ticker-item">
+                        <span class="ticker-name" style="cursor:pointer" onclick="filterByTicker('${t.ticker}')">${t.ticker}</span>
+                        <span class="ticker-stats">${t.count} signals &middot; ${formatPremium(t.premium)}</span>
+                    </li>`;
+            }
+            ul.innerHTML = html;
+        }
+
+        function filterByTicker(ticker) {
+            const select = document.getElementById('filterTicker');
+            // If ticker is in the dropdown, select it; otherwise add it
+            let found = false;
+            for (const opt of select.options) {
+                if (opt.value === ticker) { found = true; break; }
+            }
+            if (!found) {
+                const opt = document.createElement('option');
+                opt.value = ticker;
+                opt.textContent = ticker;
+                select.appendChild(opt);
+            }
+            select.value = ticker;
+
+            // Highlight watchlist tag
+            document.querySelectorAll('.watchlist-tag').forEach(el => {
+                el.classList.toggle('active', el.textContent.trim() === ticker);
+            });
+
+            refresh();
+        }
+
+        function refresh() {
+            loadStats();
+            loadSignals();
+        }
+
+        // Auto-refresh
+        function setupAutoRefresh() {
+            if (refreshTimer) clearInterval(refreshTimer);
+            if (document.getElementById('autoRefresh').checked) {
+                refreshTimer = setInterval(refresh, 30000);
+            }
+        }
+
+        // Events
+        document.getElementById('filterTicker').addEventListener('change', refresh);
+        document.getElementById('filterRisk').addEventListener('change', refresh);
+        document.getElementById('filterType').addEventListener('change', refresh);
+        document.getElementById('filterDate').addEventListener('change', refresh);
+        document.getElementById('autoRefresh').addEventListener('change', setupAutoRefresh);
+
+        // Initial load
+        refresh();
+        setupAutoRefresh();
+    </script>
+</body>
+</html>
