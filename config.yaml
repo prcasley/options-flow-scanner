@@ -70,7 +70,18 @@ daily_summary:
   minute: 15
   top_n: 10
 
+# EMA (exponential moving average) settings for volume tracking
+ema:
+  alpha: 0.3                         # Smoothing factor (0-1)
+  max_tracked_contracts: 10000       # Cap to prevent memory growth
+
 # Logging
 log_level: INFO
+log_json: false                      # Set true for structured JSON logs (containers)
 csv_log_path: "data/alerts.csv"
 db_path: "data/signals.db"
+
+# Health check HTTP server
+health:
+  host: "0.0.0.0"
+  port: 8080

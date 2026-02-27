@@ -1,6 +1,7 @@
 """SQLite database for historical signal storage."""
 
 import logging
+from datetime import datetime
 from pathlib import Path
 
 import aiosqlite
@@ -98,8 +99,6 @@ class SignalDatabase:
         rows = await cursor.fetchall()
         signals = []
         for row in rows:
-            from datetime import datetime
-
             signals.append(
                 Signal(
                     timestamp=datetime.fromisoformat(row[0]),
@@ -138,8 +137,6 @@ class SignalDatabase:
         rows = await cursor.fetchall()
         signals = []
         for row in rows:
-            from datetime import datetime
-
             signals.append(
                 Signal(
                     timestamp=datetime.fromisoformat(row[0]),

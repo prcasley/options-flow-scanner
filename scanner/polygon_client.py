@@ -12,6 +12,22 @@ logger = logging.getLogger(__name__)
 # Polygon REST base
 BASE_URL = "https://api.polygon.io"
 
+# Required fields for a valid options snapshot contract
+_REQUIRED_DETAILS_FIELDS = {"strike_price", "expiration_date", "contract_type"}
+
+
+def _validate_options_contract(raw: dict) -> bool:
+    """Validate that an options contract snapshot has required fields."""
+    details = raw.get("details")
+    if not isinstance(details, dict):
+        return False
+    if not _REQUIRED_DETAILS_FIELDS.issubset(details.keys()):
+        return False
+    day = raw.get("day")
+    if day is not None and not isinstance(day, dict):
+        return False
+    return True
+
 
 class RateLimiter:
     """Token-bucket rate limiter for Polygon free tier."""
@@ -53,7 +69,7 @@ class PolygonClient:
             await self._session.close()
 
     async def _request(self, path: str, params: Optional[dict] = None) -> dict:
-        """Make a rate-limited GET request with retries."""
+        """Make a rate-limited GET request with retries and response validation."""
         if params is None:
             params = {}
         params["apiKey"] = self.api_key
@@ -66,7 +82,11 @@ class PolygonClient:
             try:
                 async with session.get(url, params=params) as resp:
                     if resp.status == 200:
-                        return await resp.json()
+                        data = await resp.json()
+                        if not isinstance(data, dict):
+                            logger.error("API returned non-dict response for %s", path)
+                            return {}
+                        return data
                     if resp.status == 429:
                         logger.warning("Rate limited (429), retry %d/%d",
                                        attempt, self.max_retries)
@@ -92,13 +112,25 @@ class PolygonClient:
     async def get_options_snapshot(self, underlying: str) -> list[dict]:
         """Get all options contracts snapshot for a ticker.
         Uses: GET /v3/snapshot/options/{underlyingAsset}
+        Validates each contract has required fields before including it.
         """
         all_results = []
         path = f"/v3/snapshot/options/{underlying}"
         params = {"limit": 250}
 
         data = await self._request(path, params)
-        all_results.extend(data.get("results", []))
+        results = data.get("results")
+        if not isinstance(results, list):
+            logger.warning("No valid results array for %s snapshot", underlying)
+            return []
+        skipped = 0
+        for item in results:
+            if _validate_options_contract(item):
+                all_results.append(item)
+            else:
+                skipped += 1
+        if skipped:
+            logger.debug("Skipped %d invalid contracts for %s", skipped, underlying)
 
         # Paginate if there's a next_url (respect rate limits)
         next_url = data.get("next_url")
@@ -111,11 +143,18 @@ class PolygonClient:
                 async with session.get(full_url) as resp:
                     if resp.status == 200:
                         page = await resp.json()
-                        all_results.extend(page.get("results", []))
+                        page_results = page.get("results")
+                        if isinstance(page_results, list):
+                            for item in page_results:
+                                if _validate_options_contract(item):
+                                    all_results.append(item)
                         next_url = page.get("next_url")
                     else:
+                        logger.warning("Pagination failed with status %d for %s",
+                                       resp.status, underlying)
                         break
-            except (aiohttp.ClientError, asyncio.TimeoutError):
+            except (aiohttp.ClientError, asyncio.TimeoutError) as e:
+                logger.warning("Pagination request failed for %s: %s", underlying, e)
                 break
 
         return all_results
