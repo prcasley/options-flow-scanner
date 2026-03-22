@@ -2,16 +2,19 @@
 
 from datetime import datetime
 
-import pytest
 
-from scanner.models import OptionsContract, Signal
+from scanner.core.models import OptionsContract, Signal
 
 
 class TestOptionsContract:
     def test_basic_creation(self):
         c = OptionsContract(
-            ticker="AAPL", strike=220.0, expiry="2025-03-21",
-            contract_type="call", volume=1000, open_interest=500,
+            ticker="AAPL",
+            strike=220.0,
+            expiry="2025-03-21",
+            contract_type="call",
+            volume=1000,
+            open_interest=500,
             last_price=3.0,
         )
         assert c.ticker == "AAPL"
@@ -23,9 +26,14 @@ class TestSignal:
     def test_contract_label_call(self):
         sig = Signal(
             timestamp=datetime(2025, 3, 15),
-            ticker="AAPL", strike=220.0, expiry="2025-03-21",
-            contract_type="call", volume=5000, open_interest=1200,
-            estimated_premium=1_500_000.0, risk_score=4,
+            ticker="AAPL",
+            strike=220.0,
+            expiry="2025-03-21",
+            contract_type="call",
+            volume=5000,
+            open_interest=1200,
+            estimated_premium=1_500_000.0,
+            risk_score=4,
         )
         label = sig.contract_label
         assert "AAPL" in label
@@ -35,9 +43,14 @@ class TestSignal:
     def test_contract_label_put(self):
         sig = Signal(
             timestamp=datetime(2025, 3, 15),
-            ticker="SPY", strike=500.0, expiry="2025-06-20",
-            contract_type="put", volume=1000, open_interest=300,
-            estimated_premium=200_000.0, risk_score=2,
+            ticker="SPY",
+            strike=500.0,
+            expiry="2025-06-20",
+            contract_type="put",
+            volume=1000,
+            open_interest=300,
+            estimated_premium=200_000.0,
+            risk_score=2,
         )
         assert "500P" in sig.contract_label
         assert "6/20" in sig.contract_label
@@ -45,27 +58,42 @@ class TestSignal:
     def test_premium_str_millions(self):
         sig = Signal(
             timestamp=datetime(2025, 3, 15),
-            ticker="AAPL", strike=220.0, expiry="2025-03-21",
-            contract_type="call", volume=5000, open_interest=1200,
-            estimated_premium=2_500_000.0, risk_score=4,
+            ticker="AAPL",
+            strike=220.0,
+            expiry="2025-03-21",
+            contract_type="call",
+            volume=5000,
+            open_interest=1200,
+            estimated_premium=2_500_000.0,
+            risk_score=4,
         )
         assert sig.premium_str == "$2.5M"
 
     def test_premium_str_thousands(self):
         sig = Signal(
             timestamp=datetime(2025, 3, 15),
-            ticker="AAPL", strike=220.0, expiry="2025-03-21",
-            contract_type="call", volume=500, open_interest=100,
-            estimated_premium=75_000.0, risk_score=2,
+            ticker="AAPL",
+            strike=220.0,
+            expiry="2025-03-21",
+            contract_type="call",
+            volume=500,
+            open_interest=100,
+            estimated_premium=75_000.0,
+            risk_score=2,
         )
         assert sig.premium_str == "$75K"
 
     def test_premium_str_dollars(self):
         sig = Signal(
             timestamp=datetime(2025, 3, 15),
-            ticker="AAPL", strike=220.0, expiry="2025-03-21",
-            contract_type="call", volume=10, open_interest=50,
-            estimated_premium=500.0, risk_score=1,
+            ticker="AAPL",
+            strike=220.0,
+            expiry="2025-03-21",
+            contract_type="call",
+            volume=10,
+            open_interest=50,
+            estimated_premium=500.0,
+            risk_score=1,
         )
         assert sig.premium_str == "$500"
 
@@ -85,9 +113,14 @@ class TestSignal:
     def test_default_field_values(self):
         sig = Signal(
             timestamp=datetime(2025, 3, 15),
-            ticker="TEST", strike=100.0, expiry="2025-03-21",
-            contract_type="call", volume=100, open_interest=50,
-            estimated_premium=10_000.0, risk_score=1,
+            ticker="TEST",
+            strike=100.0,
+            expiry="2025-03-21",
+            contract_type="call",
+            volume=100,
+            open_interest=50,
+            estimated_premium=10_000.0,
+            risk_score=1,
         )
         assert sig.signal_types == []
         assert sig.description == ""

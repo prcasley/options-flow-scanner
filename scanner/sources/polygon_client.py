@@ -49,13 +49,22 @@ class RateLimiter:
 
 
 class PolygonClient:
-    def __init__(self, api_key: str, rate_limit_cpm: int = 5,
-                 max_retries: int = 3, retry_delay: float = 15.0):
+    def __init__(
+        self,
+        api_key: str,
+        rate_limit_cpm: int = 5,
+        max_retries: int = 3,
+        retry_delay: float = 15.0,
+    ):
         self.api_key = api_key
         self.rate_limiter = RateLimiter(rate_limit_cpm)
         self.max_retries = max_retries
         self.retry_delay = retry_delay
         self._session: Optional[aiohttp.ClientSession] = None
+
+    @property
+    def name(self) -> str:
+        return "polygon"
 
     async def _get_session(self) -> aiohttp.ClientSession:
         if self._session is None or self._session.closed:
@@ -88,13 +97,18 @@ class PolygonClient:
                             return {}
                         return data
                     if resp.status == 429:
-                        logger.warning("Rate limited (429), retry %d/%d",
-                                       attempt, self.max_retries)
+                        logger.warning(
+                            "Rate limited (429), retry %d/%d", attempt, self.max_retries
+                        )
                         await asyncio.sleep(self.retry_delay)
                         continue
                     text = await resp.text()
-                    logger.error("API error %d: %s (attempt %d)",
-                                 resp.status, text[:200], attempt)
+                    logger.error(
+                        "API error %d: %s (attempt %d)",
+                        resp.status,
+                        text[:200],
+                        attempt,
+                    )
                     if resp.status >= 500:
                         await asyncio.sleep(self.retry_delay)
                         continue
@@ -150,8 +164,11 @@ class PolygonClient:
                                     all_results.append(item)
                         next_url = page.get("next_url")
                     else:
-                        logger.warning("Pagination failed with status %d for %s",
-                                       resp.status, underlying)
+                        logger.warning(
+                            "Pagination failed with status %d for %s",
+                            resp.status,
+                            underlying,
+                        )
                         break
             except (aiohttp.ClientError, asyncio.TimeoutError) as e:
                 logger.warning("Pagination request failed for %s: %s", underlying, e)
@@ -163,9 +180,7 @@ class PolygonClient:
         """Get top stock gainers/losers for discovery mode.
         Uses: GET /v2/snapshot/locale/us/markets/stocks/{direction}
         """
-        data = await self._request(
-            f"/v2/snapshot/locale/us/markets/stocks/{direction}"
-        )
+        data = await self._request(f"/v2/snapshot/locale/us/markets/stocks/{direction}")
         return data.get("tickers", [])
 
     async def get_most_active(self) -> list[str]:
@@ -187,10 +202,13 @@ class PolygonClient:
         results = data.get("results", [])
         return results[0] if results else {}
 
-    async def get_options_chain(self, underlying: str,
-                                 expiry_gte: Optional[str] = None,
-                                 expiry_lte: Optional[str] = None,
-                                 contract_type: Optional[str] = None) -> list[dict]:
+    async def get_options_chain(
+        self,
+        underlying: str,
+        expiry_gte: Optional[str] = None,
+        expiry_lte: Optional[str] = None,
+        contract_type: Optional[str] = None,
+    ) -> list[dict]:
         """Get options contracts reference data.
         Uses: GET /v3/reference/options/contracts
         """

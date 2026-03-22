@@ -1,7 +1,8 @@
 """Web dashboard for monitoring scan results and signal history."""
 
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime
+
 from aiohttp import web
 
 logger = logging.getLogger(__name__)
@@ -139,8 +140,11 @@ class DashboardServer:
             "uptime_seconds": round(uptime, 1),
             "scan_count": self.health.scan_count,
             "signal_count": self.health.signal_count,
-            "last_scan_time": (self.health.last_scan_time.isoformat()
-                               if self.health.last_scan_time else None),
+            "last_scan_time": (
+                self.health.last_scan_time.isoformat()
+                if self.health.last_scan_time
+                else None
+            ),
             "last_error": self.health.last_error,
         }
         return web.json_response(body)

@@ -1,15 +1,12 @@
 """Unit tests for the alert delivery system."""
 
 import csv
-import os
-import tempfile
 from pathlib import Path
 from unittest.mock import AsyncMock, patch, MagicMock
 
 import pytest
 
-from scanner.alerts import AlertManager, RISK_EMOJI
-from scanner.models import Signal
+from scanner.alerts.manager import AlertManager, RISK_EMOJI
 
 
 @pytest.fixture
@@ -44,7 +41,7 @@ class TestCSVLogging:
         alert_mgr._log_csv(sample_signal)
         with open(tmp_csv) as f:
             reader = csv.reader(f)
-            header = next(reader)
+            next(reader)  # skip header
             row = next(reader)
             assert row[1] == "AAPL"
             assert "220" in row[2]
@@ -71,7 +68,7 @@ class TestDiscordPosting:
 
     @pytest.mark.asyncio
     async def test_post_discord_sends_request(self, alert_mgr_with_webhook):
-        with patch("scanner.alerts.aiohttp.ClientSession") as mock_session_cls:
+        with patch("scanner.alerts.manager.aiohttp.ClientSession") as mock_session_cls:
             mock_resp = AsyncMock()
             mock_resp.status = 204
             mock_resp.__aenter__ = AsyncMock(return_value=mock_resp)
@@ -93,7 +90,7 @@ class TestDiscordPosting:
     @pytest.mark.asyncio
     async def test_truncates_long_messages(self, alert_mgr_with_webhook):
         long_msg = "x" * 3000
-        with patch("scanner.alerts.aiohttp.ClientSession") as mock_session_cls:
+        with patch("scanner.alerts.manager.aiohttp.ClientSession") as mock_session_cls:
             mock_resp = AsyncMock()
             mock_resp.status = 204
             mock_resp.__aenter__ = AsyncMock(return_value=mock_resp)

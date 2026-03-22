@@ -1,54 +1,75 @@
 """Unit tests for the main scan loop orchestrator."""
 
 from datetime import datetime, date
-from unittest.mock import AsyncMock, patch, PropertyMock
+from unittest.mock import AsyncMock, patch
 
 import pytest
 import pytz
 
-from scanner.detector import Detector
-from scanner.scheduler import Scanner, US_MARKET_HOLIDAYS
+from scanner.analysis.detector import Detector
+from scanner.core.scheduler import Scanner, US_MARKET_HOLIDAYS
 
 
 @pytest.fixture
 def scanner(sample_config, mock_polygon_client, mock_alert_manager, mock_database):
     det = Detector(sample_config)
-    return Scanner(sample_config, mock_polygon_client, det,
-                   mock_alert_manager, mock_database)
+    return Scanner(
+        sample_config, mock_polygon_client, det, mock_alert_manager, mock_database
+    )
 
 
 class TestMarketHours:
     def test_weekday_during_hours(self, scanner):
         # Monday 10:30 AM ET
-        with patch.object(scanner, '_now_et', return_value=datetime(
-            2025, 3, 17, 10, 30, 0, tzinfo=pytz.timezone("US/Eastern")
-        )):
+        with patch.object(
+            scanner,
+            "_now_et",
+            return_value=datetime(
+                2025, 3, 17, 10, 30, 0, tzinfo=pytz.timezone("US/Eastern")
+            ),
+        ):
             assert scanner._is_market_hours() is True
 
     def test_weekday_before_open(self, scanner):
-        with patch.object(scanner, '_now_et', return_value=datetime(
-            2025, 3, 17, 8, 0, 0, tzinfo=pytz.timezone("US/Eastern")
-        )):
+        with patch.object(
+            scanner,
+            "_now_et",
+            return_value=datetime(
+                2025, 3, 17, 8, 0, 0, tzinfo=pytz.timezone("US/Eastern")
+            ),
+        ):
             assert scanner._is_market_hours() is False
 
     def test_weekday_after_close(self, scanner):
-        with patch.object(scanner, '_now_et', return_value=datetime(
-            2025, 3, 17, 17, 0, 0, tzinfo=pytz.timezone("US/Eastern")
-        )):
+        with patch.object(
+            scanner,
+            "_now_et",
+            return_value=datetime(
+                2025, 3, 17, 17, 0, 0, tzinfo=pytz.timezone("US/Eastern")
+            ),
+        ):
             assert scanner._is_market_hours() is False
 
     def test_weekend_rejected(self, scanner):
         # Saturday
-        with patch.object(scanner, '_now_et', return_value=datetime(
-            2025, 3, 15, 10, 30, 0, tzinfo=pytz.timezone("US/Eastern")
-        )):
+        with patch.object(
+            scanner,
+            "_now_et",
+            return_value=datetime(
+                2025, 3, 15, 10, 30, 0, tzinfo=pytz.timezone("US/Eastern")
+            ),
+        ):
             assert scanner._is_market_hours() is False
 
     def test_holiday_rejected(self, scanner):
         # Christmas 2025 is a Thursday
-        with patch.object(scanner, '_now_et', return_value=datetime(
-            2025, 12, 25, 10, 30, 0, tzinfo=pytz.timezone("US/Eastern")
-        )):
+        with patch.object(
+            scanner,
+            "_now_et",
+            return_value=datetime(
+                2025, 12, 25, 10, 30, 0, tzinfo=pytz.timezone("US/Eastern")
+            ),
+        ):
             assert scanner._is_market_hours() is False
 
 
@@ -77,18 +98,22 @@ class TestDailySummary:
     @pytest.mark.asyncio
     async def test_sends_summary_at_target_time(self, scanner):
         # At summary time (4:15 PM ET)
-        with patch.object(scanner, '_now_et', return_value=datetime(
-            2025, 3, 17, 16, 15, 0, tzinfo=pytz.timezone("US/Eastern")
-        )):
+        with patch.object(
+            scanner,
+            "_now_et",
+            return_value=datetime(
+                2025, 3, 17, 16, 15, 0, tzinfo=pytz.timezone("US/Eastern")
+            ),
+        ):
             await scanner._check_daily_summary()
             scanner.alerts.send_daily_summary.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_no_duplicate_summary(self, scanner):
         et = pytz.timezone("US/Eastern")
-        with patch.object(scanner, '_now_et', return_value=datetime(
-            2025, 3, 17, 16, 15, 0, tzinfo=et
-        )):
+        with patch.object(
+            scanner, "_now_et", return_value=datetime(2025, 3, 17, 16, 15, 0, tzinfo=et)
+        ):
             await scanner._check_daily_summary()
             await scanner._check_daily_summary()  # second call
             # Should only send once
@@ -98,33 +123,41 @@ class TestDailySummary:
     async def test_summary_resets_for_new_day(self, scanner):
         et = pytz.timezone("US/Eastern")
         # Day 1
-        with patch.object(scanner, '_now_et', return_value=datetime(
-            2025, 3, 17, 16, 15, 0, tzinfo=et
-        )):
+        with patch.object(
+            scanner, "_now_et", return_value=datetime(2025, 3, 17, 16, 15, 0, tzinfo=et)
+        ):
             await scanner._check_daily_summary()
 
         # Day 2
-        with patch.object(scanner, '_now_et', return_value=datetime(
-            2025, 3, 18, 16, 15, 0, tzinfo=et
-        )):
+        with patch.object(
+            scanner, "_now_et", return_value=datetime(2025, 3, 18, 16, 15, 0, tzinfo=et)
+        ):
             await scanner._check_daily_summary()
 
         assert scanner.alerts.send_daily_summary.call_count == 2
 
     @pytest.mark.asyncio
     async def test_no_summary_before_target(self, scanner):
-        with patch.object(scanner, '_now_et', return_value=datetime(
-            2025, 3, 17, 16, 10, 0, tzinfo=pytz.timezone("US/Eastern")
-        )):
+        with patch.object(
+            scanner,
+            "_now_et",
+            return_value=datetime(
+                2025, 3, 17, 16, 10, 0, tzinfo=pytz.timezone("US/Eastern")
+            ),
+        ):
             await scanner._check_daily_summary()
             scanner.alerts.send_daily_summary.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_no_summary_when_disabled(self, scanner):
         scanner.config["daily_summary"]["enabled"] = False
-        with patch.object(scanner, '_now_et', return_value=datetime(
-            2025, 3, 17, 16, 15, 0, tzinfo=pytz.timezone("US/Eastern")
-        )):
+        with patch.object(
+            scanner,
+            "_now_et",
+            return_value=datetime(
+                2025, 3, 17, 16, 15, 0, tzinfo=pytz.timezone("US/Eastern")
+            ),
+        ):
             await scanner._check_daily_summary()
             scanner.alerts.send_daily_summary.assert_not_called()
 
@@ -149,7 +182,9 @@ class TestScanCycle:
     @pytest.mark.asyncio
     async def test_signals_sent_to_alerts(self, scanner, sample_contract_raw):
         scanner._running = True
-        scanner.polygon.get_options_snapshot = AsyncMock(return_value=[sample_contract_raw])
+        scanner.polygon.get_options_snapshot = AsyncMock(
+            return_value=[sample_contract_raw]
+        )
         # Seed a low average so the contract triggers a signal
         det = scanner.detector
         key = det._contract_key("SPY", 220.0, "2025-03-21", "call")
@@ -182,9 +217,7 @@ class TestDiscovery:
 
     @pytest.mark.asyncio
     async def test_discovery_error_returns_empty(self, scanner):
-        scanner.polygon.get_most_active = AsyncMock(
-            side_effect=Exception("timeout")
-        )
+        scanner.polygon.get_most_active = AsyncMock(side_effect=Exception("timeout"))
         tickers = await scanner._discover_tickers()
         assert tickers == []
 

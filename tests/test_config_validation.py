@@ -9,7 +9,11 @@ from main import validate_config
 def valid_config():
     return {
         "scan_interval_seconds": 60,
-        "rate_limit": {"calls_per_minute": 5, "retry_delay_seconds": 15, "max_retries": 3},
+        "rate_limit": {
+            "calls_per_minute": 5,
+            "retry_delay_seconds": 15,
+            "max_retries": 3,
+        },
         "thresholds": {
             "volume_spike_multiplier": 5.0,
             "min_volume": 100,

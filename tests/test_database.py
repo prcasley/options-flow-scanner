@@ -4,8 +4,8 @@ from datetime import datetime
 
 import pytest
 
-from scanner.database import SignalDatabase
-from scanner.models import Signal
+from scanner.core.database import SignalDatabase
+from scanner.core.models import Signal
 
 
 @pytest.fixture
@@ -20,8 +20,14 @@ async def db():
 @pytest.fixture
 def make_signal():
     """Factory for Signal objects with customizable fields."""
-    def _make(ticker="AAPL", risk_score=3, premium=500_000.0,
-              timestamp=None, expiry="2025-03-21"):
+
+    def _make(
+        ticker="AAPL",
+        risk_score=3,
+        premium=500_000.0,
+        timestamp=None,
+        expiry="2025-03-21",
+    ):
         return Signal(
             timestamp=timestamp or datetime(2025, 3, 15, 10, 30, 0),
             ticker=ticker,
@@ -38,6 +44,7 @@ def make_signal():
             oi_ratio=4.2,
             last_price=3.0,
         )
+
     return _make
 
 
@@ -87,7 +94,9 @@ class TestInsert:
         sig = make_signal(ticker="TSLA", risk_score=5, premium=2_000_000.0)
         await db.insert_signal(sig)
 
-        cursor = await db._db.execute("SELECT ticker, risk_score, estimated_premium FROM signals")
+        cursor = await db._db.execute(
+            "SELECT ticker, risk_score, estimated_premium FROM signals"
+        )
         row = await cursor.fetchone()
         assert row[0] == "TSLA"
         assert row[1] == 5
@@ -97,12 +106,24 @@ class TestInsert:
 class TestQuery:
     @pytest.mark.asyncio
     async def test_get_today_signals(self, db, make_signal):
-        sig1 = make_signal(ticker="AAPL", risk_score=5, premium=1_000_000,
-                           timestamp=datetime(2025, 3, 15, 10, 0))
-        sig2 = make_signal(ticker="MSFT", risk_score=3, premium=500_000,
-                           timestamp=datetime(2025, 3, 15, 11, 0))
-        sig3 = make_signal(ticker="GOOGL", risk_score=4, premium=800_000,
-                           timestamp=datetime(2025, 3, 14, 10, 0))  # different day
+        sig1 = make_signal(
+            ticker="AAPL",
+            risk_score=5,
+            premium=1_000_000,
+            timestamp=datetime(2025, 3, 15, 10, 0),
+        )
+        sig2 = make_signal(
+            ticker="MSFT",
+            risk_score=3,
+            premium=500_000,
+            timestamp=datetime(2025, 3, 15, 11, 0),
+        )
+        sig3 = make_signal(
+            ticker="GOOGL",
+            risk_score=4,
+            premium=800_000,
+            timestamp=datetime(2025, 3, 14, 10, 0),
+        )  # different day
         await db.insert_signals([sig1, sig2, sig3])
 
         results = await db.get_today_signals("2025-03-15")
@@ -119,8 +140,7 @@ class TestQuery:
     @pytest.mark.asyncio
     async def test_get_ticker_history(self, db, make_signal):
         for i in range(5):
-            sig = make_signal(ticker="SPY",
-                              timestamp=datetime(2025, 3, 15, 10 + i, 0))
+            sig = make_signal(ticker="SPY", timestamp=datetime(2025, 3, 15, 10 + i, 0))
             await db.insert_signal(sig)
 
         results = await db.get_ticker_history("SPY", limit=3)

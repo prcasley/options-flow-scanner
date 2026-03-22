@@ -5,7 +5,7 @@ from collections import defaultdict
 from dataclasses import dataclass, field
 from datetime import datetime
 
-from .models import Signal
+from ..core.models import Signal
 
 logger = logging.getLogger(__name__)
 
@@ -13,6 +13,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class PatternResult:
     """A detected recurring pattern in signal data."""
+
     ticker: str
     pattern_type: str
     occurrences: int
@@ -73,20 +74,22 @@ class PatternAnalyzer:
             for s in group:
                 all_types.update(s.signal_types)
 
-            patterns.append(PatternResult(
-                ticker=ticker,
-                pattern_type="repeat_flow",
-                occurrences=len(group),
-                avg_risk_score=round(avg_risk, 1),
-                avg_premium=avg_prem,
-                description=(
-                    f"{ticker} showing repeated {direction} flow: "
-                    f"{len(group)} signals, avg risk {avg_risk:.1f}/5"
-                ),
-                first_seen=min(s.timestamp for s in group),
-                last_seen=max(s.timestamp for s in group),
-                signal_types=sorted(all_types),
-            ))
+            patterns.append(
+                PatternResult(
+                    ticker=ticker,
+                    pattern_type="repeat_flow",
+                    occurrences=len(group),
+                    avg_risk_score=round(avg_risk, 1),
+                    avg_premium=avg_prem,
+                    description=(
+                        f"{ticker} showing repeated {direction} flow: "
+                        f"{len(group)} signals, avg risk {avg_risk:.1f}/5"
+                    ),
+                    first_seen=min(s.timestamp for s in group),
+                    last_seen=max(s.timestamp for s in group),
+                    signal_types=sorted(all_types),
+                )
+            )
         return patterns
 
     def _detect_accumulation(self, signals: list[Signal]) -> list[PatternResult]:
@@ -107,8 +110,9 @@ class PatternAnalyzer:
             volumes = [s.volume for s in group]
             if len(volumes) >= 3:
                 # Check if at least 50% of sequential pairs show increase
-                increases = sum(1 for i in range(len(volumes) - 1)
-                                if volumes[i + 1] > volumes[i])
+                increases = sum(
+                    1 for i in range(len(volumes) - 1) if volumes[i + 1] > volumes[i]
+                )
                 if increases / (len(volumes) - 1) < 0.5:
                     continue
 
@@ -116,20 +120,24 @@ class PatternAnalyzer:
             side = "C" if ctype == "call" else "P"
             avg_prem = sum(s.estimated_premium for s in group) / len(group)
 
-            patterns.append(PatternResult(
-                ticker=ticker,
-                pattern_type="accumulation",
-                occurrences=len(group),
-                avg_risk_score=round(sum(s.risk_score for s in group) / len(group), 1),
-                avg_premium=avg_prem,
-                description=(
-                    f"{ticker} {strike}{side} accumulation: "
-                    f"{len(group)} sessions with growing volume"
-                ),
-                first_seen=group[0].timestamp,
-                last_seen=group[-1].timestamp,
-                signal_types=["accumulation"],
-            ))
+            patterns.append(
+                PatternResult(
+                    ticker=ticker,
+                    pattern_type="accumulation",
+                    occurrences=len(group),
+                    avg_risk_score=round(
+                        sum(s.risk_score for s in group) / len(group), 1
+                    ),
+                    avg_premium=avg_prem,
+                    description=(
+                        f"{ticker} {strike}{side} accumulation: "
+                        f"{len(group)} sessions with growing volume"
+                    ),
+                    first_seen=group[0].timestamp,
+                    last_seen=group[-1].timestamp,
+                    signal_types=["accumulation"],
+                )
+            )
         return patterns
 
     def _detect_cluster_activity(self, signals: list[Signal]) -> list[PatternResult]:
@@ -152,21 +160,23 @@ class PatternAnalyzer:
             avg_risk = sum(s.risk_score for s in group) / len(group)
             total_prem = sum(s.estimated_premium for s in group)
 
-            patterns.append(PatternResult(
-                ticker=ticker,
-                pattern_type="cluster",
-                occurrences=len(group),
-                avg_risk_score=round(avg_risk, 1),
-                avg_premium=total_prem / len(group),
-                description=(
-                    f"{ticker} cluster on {date_str}: "
-                    f"{len(strikes)} strikes, {len(group)} signals, "
-                    f"total premium ${total_prem/1e6:.1f}M"
-                ),
-                first_seen=min(s.timestamp for s in group),
-                last_seen=max(s.timestamp for s in group),
-                signal_types=["cluster"],
-            ))
+            patterns.append(
+                PatternResult(
+                    ticker=ticker,
+                    pattern_type="cluster",
+                    occurrences=len(group),
+                    avg_risk_score=round(avg_risk, 1),
+                    avg_premium=total_prem / len(group),
+                    description=(
+                        f"{ticker} cluster on {date_str}: "
+                        f"{len(strikes)} strikes, {len(group)} signals, "
+                        f"total premium ${total_prem / 1e6:.1f}M"
+                    ),
+                    first_seen=min(s.timestamp for s in group),
+                    last_seen=max(s.timestamp for s in group),
+                    signal_types=["cluster"],
+                )
+            )
         return patterns
 
     def _detect_high_conviction(self, signals: list[Signal]) -> list[PatternResult]:
@@ -185,20 +195,24 @@ class PatternAnalyzer:
             for s in group:
                 all_types.update(s.signal_types)
 
-            patterns.append(PatternResult(
-                ticker=ticker,
-                pattern_type="high_conviction",
-                occurrences=len(group),
-                avg_risk_score=round(sum(s.risk_score for s in group) / len(group), 1),
-                avg_premium=avg_prem,
-                description=(
-                    f"{ticker} high-conviction: {len(group)} signals "
-                    f"at risk 4+, avg premium ${avg_prem/1e6:.1f}M"
-                ),
-                first_seen=min(s.timestamp for s in group),
-                last_seen=max(s.timestamp for s in group),
-                signal_types=sorted(all_types),
-            ))
+            patterns.append(
+                PatternResult(
+                    ticker=ticker,
+                    pattern_type="high_conviction",
+                    occurrences=len(group),
+                    avg_risk_score=round(
+                        sum(s.risk_score for s in group) / len(group), 1
+                    ),
+                    avg_premium=avg_prem,
+                    description=(
+                        f"{ticker} high-conviction: {len(group)} signals "
+                        f"at risk 4+, avg premium ${avg_prem / 1e6:.1f}M"
+                    ),
+                    first_seen=min(s.timestamp for s in group),
+                    last_seen=max(s.timestamp for s in group),
+                    signal_types=sorted(all_types),
+                )
+            )
         return patterns
 
     def format_report(self, patterns: list[PatternResult]) -> str:
@@ -206,7 +220,7 @@ class PatternAnalyzer:
         if not patterns:
             return "No recurring patterns detected."
 
-        lines = [f"Recurring Patterns Detected ({len(patterns)} patterns)\n{'='*50}"]
+        lines = [f"Recurring Patterns Detected ({len(patterns)} patterns)\n{'=' * 50}"]
         for i, p in enumerate(patterns, 1):
             lines.append(
                 f"\n{i}. [{p.pattern_type.upper()}] {p.description}"

@@ -4,8 +4,7 @@ from datetime import datetime, timedelta
 
 import pytest
 
-from scanner.detector import Detector
-from scanner.models import Signal
+from scanner.analysis.detector import Detector
 
 
 class TestDetectorInit:

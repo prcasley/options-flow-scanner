@@ -7,11 +7,17 @@ from pathlib import Path
 
 import aiohttp
 
-from .models import Signal
+from ..core.models import Signal
 
 logger = logging.getLogger(__name__)
 
-RISK_EMOJI = {1: "\u26aa", 2: "\ud83d\udfe2", 3: "\ud83d\udfe1", 4: "\ud83d\udfe0", 5: "\ud83d\udd34"}
+RISK_EMOJI = {
+    1: "\u26aa",
+    2: "\ud83d\udfe2",
+    3: "\ud83d\udfe1",
+    4: "\ud83d\udfe0",
+    5: "\ud83d\udd34",
+}
 
 
 class AlertManager:
@@ -39,7 +45,7 @@ class AlertManager:
             return
         # Group into chunks of 10 to stay under Discord embed limits
         for i in range(0, len(signals), 10):
-            batch = signals[i:i + 10]
+            batch = signals[i : i + 10]
             message = self._format_batch(batch)
             await self._post_discord(message)
         for s in signals:
@@ -52,7 +58,9 @@ class AlertManager:
             await self._post_discord(msg)
             return
 
-        lines = [f"**\ud83d\udcca Daily Summary \u2014 {date_str} | Top {len(signals)} Signals**\n"]
+        lines = [
+            f"**\ud83d\udcca Daily Summary \u2014 {date_str} | Top {len(signals)} Signals**\n"
+        ]
         for i, s in enumerate(signals, 1):
             emoji = RISK_EMOJI.get(s.risk_score, "\u26aa")
             lines.append(f"{i}. {emoji} **[{s.risk_score}/5]** {s.description}")
@@ -98,8 +106,9 @@ class AlertManager:
                         logger.debug("Discord alert sent")
                     else:
                         text = await resp.text()
-                        logger.error("Discord webhook error %d: %s",
-                                     resp.status, text[:200])
+                        logger.error(
+                            "Discord webhook error %d: %s", resp.status, text[:200]
+                        )
         except Exception as e:
             logger.error("Failed to send Discord alert: %s", e)
 

@@ -6,10 +6,10 @@ from datetime import datetime, date
 
 import pytz
 
-from .alerts import AlertManager
-from .database import SignalDatabase
-from .detector import Detector
-from .polygon_client import PolygonClient
+from ..alerts.manager import AlertManager
+from ..core.database import SignalDatabase
+from ..analysis.detector import Detector
+from ..sources.polygon_client import PolygonClient
 
 logger = logging.getLogger(__name__)
 
@@ -17,32 +17,63 @@ logger = logging.getLogger(__name__)
 # Update annually or replace with a holiday calendar library.
 US_MARKET_HOLIDAYS: set[date] = {
     # 2024
-    date(2024, 1, 1), date(2024, 1, 15), date(2024, 2, 19),
-    date(2024, 3, 29), date(2024, 5, 27), date(2024, 6, 19),
-    date(2024, 7, 4), date(2024, 9, 2), date(2024, 11, 28),
+    date(2024, 1, 1),
+    date(2024, 1, 15),
+    date(2024, 2, 19),
+    date(2024, 3, 29),
+    date(2024, 5, 27),
+    date(2024, 6, 19),
+    date(2024, 7, 4),
+    date(2024, 9, 2),
+    date(2024, 11, 28),
     date(2024, 12, 25),
     # 2025
-    date(2025, 1, 1), date(2025, 1, 20), date(2025, 2, 17),
-    date(2025, 4, 18), date(2025, 5, 26), date(2025, 6, 19),
-    date(2025, 7, 4), date(2025, 9, 1), date(2025, 11, 27),
+    date(2025, 1, 1),
+    date(2025, 1, 20),
+    date(2025, 2, 17),
+    date(2025, 4, 18),
+    date(2025, 5, 26),
+    date(2025, 6, 19),
+    date(2025, 7, 4),
+    date(2025, 9, 1),
+    date(2025, 11, 27),
     date(2025, 12, 25),
     # 2026
-    date(2026, 1, 1), date(2026, 1, 19), date(2026, 2, 16),
-    date(2026, 4, 3), date(2026, 5, 25), date(2026, 6, 19),
-    date(2026, 7, 3), date(2026, 9, 7), date(2026, 11, 26),
+    date(2026, 1, 1),
+    date(2026, 1, 19),
+    date(2026, 2, 16),
+    date(2026, 4, 3),
+    date(2026, 5, 25),
+    date(2026, 6, 19),
+    date(2026, 7, 3),
+    date(2026, 9, 7),
+    date(2026, 11, 26),
     date(2026, 12, 25),
     # 2027
-    date(2027, 1, 1), date(2027, 1, 18), date(2027, 2, 15),
-    date(2027, 3, 26), date(2027, 5, 31), date(2027, 6, 18),
-    date(2027, 7, 5), date(2027, 9, 6), date(2027, 11, 25),
+    date(2027, 1, 1),
+    date(2027, 1, 18),
+    date(2027, 2, 15),
+    date(2027, 3, 26),
+    date(2027, 5, 31),
+    date(2027, 6, 18),
+    date(2027, 7, 5),
+    date(2027, 9, 6),
+    date(2027, 11, 25),
     date(2027, 12, 24),
 }
 
 
 class Scanner:
-    def __init__(self, config: dict, polygon: PolygonClient,
-                 detector: Detector, alerts: AlertManager,
-                 db: SignalDatabase, health=None, dispatcher=None):
+    def __init__(
+        self,
+        config: dict,
+        polygon: PolygonClient,
+        detector: Detector,
+        alerts: AlertManager,
+        db: SignalDatabase,
+        health=None,
+        dispatcher=None,
+    ):
         self.config = config
         self.polygon = polygon
         self.detector = detector
@@ -63,12 +94,14 @@ class Scanner:
         open_time = now.replace(
             hour=mkt.get("open_hour", 9),
             minute=mkt.get("open_minute", 30),
-            second=0, microsecond=0,
+            second=0,
+            microsecond=0,
         )
         close_time = now.replace(
             hour=mkt.get("close_hour", 16),
             minute=mkt.get("close_minute", 0),
-            second=0, microsecond=0,
+            second=0,
+            microsecond=0,
         )
         # Weekdays only (0=Mon, 4=Fri)
         if now.weekday() > 4:
@@ -140,8 +173,9 @@ class Scanner:
 
         if all_signals:
             # Sort by risk score descending
-            all_signals.sort(key=lambda s: (s.risk_score, s.estimated_premium),
-                             reverse=True)
+            all_signals.sort(
+                key=lambda s: (s.risk_score, s.estimated_premium), reverse=True
+            )
             logger.info("Found %d signals this cycle", len(all_signals))
             await self.alerts.send_signals(all_signals)
             if self.dispatcher:
@@ -194,9 +228,11 @@ class Scanner:
         date_str = now.strftime("%Y-%m-%d")
 
         # Use date-based tracking: only send once per calendar day
-        if (now.hour == target_hour and
-                now.minute >= target_min and
-                self._daily_summary_sent_date != date_str):
+        if (
+            now.hour == target_hour
+            and now.minute >= target_min
+            and self._daily_summary_sent_date != date_str
+        ):
             self._daily_summary_sent_date = date_str
             logger.info("Sending daily summary for %s", date_str)
             try:

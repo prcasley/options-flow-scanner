@@ -119,8 +119,7 @@ class SignalDatabase:
             )
         return signals
 
-    async def get_ticker_history(self, ticker: str,
-                                  limit: int = 100) -> list[Signal]:
+    async def get_ticker_history(self, ticker: str, limit: int = 100) -> list[Signal]:
         """Get recent signals for a ticker."""
         if not self._db:
             return []

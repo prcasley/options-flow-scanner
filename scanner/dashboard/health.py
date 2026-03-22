@@ -1,9 +1,8 @@
 """Lightweight HTTP health check server for container orchestration."""
 
-import asyncio
-import json
 import logging
 from datetime import datetime
+
 from aiohttp import web
 
 logger = logging.getLogger(__name__)
@@ -51,7 +50,9 @@ class HealthServer:
             "uptime_seconds": round(uptime, 1),
             "scan_count": self.scan_count,
             "signal_count": self.signal_count,
-            "last_scan_time": self.last_scan_time.isoformat() if self.last_scan_time else None,
+            "last_scan_time": self.last_scan_time.isoformat()
+            if self.last_scan_time
+            else None,
             "last_error": self.last_error,
         }
         return web.json_response(body)

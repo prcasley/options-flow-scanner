@@ -1,11 +1,10 @@
 """Unit tests for the Polygon.io API client."""
 
-import asyncio
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from scanner.polygon_client import (
+from scanner.sources.polygon_client import (
     PolygonClient,
     RateLimiter,
     _validate_options_contract,
@@ -101,10 +100,12 @@ class TestRequest:
         mock_resp.json = AsyncMock(return_value={"results": [{"ticker": "SPY"}]})
 
         mock_session = AsyncMock()
-        mock_session.get = MagicMock(return_value=AsyncMock(
-            __aenter__=AsyncMock(return_value=mock_resp),
-            __aexit__=AsyncMock(return_value=False),
-        ))
+        mock_session.get = MagicMock(
+            return_value=AsyncMock(
+                __aenter__=AsyncMock(return_value=mock_resp),
+                __aexit__=AsyncMock(return_value=False),
+            )
+        )
         mock_session.closed = False
         client._session = mock_session
 
@@ -151,10 +152,12 @@ class TestRequest:
         mock_resp.text = AsyncMock(return_value="Forbidden")
 
         mock_session = AsyncMock()
-        mock_session.get = MagicMock(return_value=AsyncMock(
-            __aenter__=AsyncMock(return_value=mock_resp),
-            __aexit__=AsyncMock(return_value=False),
-        ))
+        mock_session.get = MagicMock(
+            return_value=AsyncMock(
+                __aenter__=AsyncMock(return_value=mock_resp),
+                __aexit__=AsyncMock(return_value=False),
+            )
+        )
         mock_session.closed = False
         client._session = mock_session
 
@@ -170,10 +173,12 @@ class TestRequest:
         mock_resp.json = AsyncMock(return_value="not a dict")
 
         mock_session = AsyncMock()
-        mock_session.get = MagicMock(return_value=AsyncMock(
-            __aenter__=AsyncMock(return_value=mock_resp),
-            __aexit__=AsyncMock(return_value=False),
-        ))
+        mock_session.get = MagicMock(
+            return_value=AsyncMock(
+                __aenter__=AsyncMock(return_value=mock_resp),
+                __aexit__=AsyncMock(return_value=False),
+            )
+        )
         mock_session.closed = False
         client._session = mock_session
 
@@ -196,9 +201,11 @@ class TestGetOptionsSnapshot:
         }
         invalid = {"details": {"strike_price": 220.0}}  # missing fields
 
-        client._request = AsyncMock(return_value={
-            "results": [valid, invalid],
-        })
+        client._request = AsyncMock(
+            return_value={
+                "results": [valid, invalid],
+            }
+        )
 
         results = await client.get_options_snapshot("AAPL")
         assert len(results) == 1
@@ -225,10 +232,12 @@ class TestGetMostActive:
     @pytest.mark.asyncio
     async def test_deduplicates_tickers(self):
         client = PolygonClient(api_key="test", retry_delay=0.01)
-        client.get_gainers_losers = AsyncMock(side_effect=[
-            [{"ticker": "SPY"}, {"ticker": "AAPL"}],
-            [{"ticker": "SPY"}, {"ticker": "MSFT"}],
-        ])
+        client.get_gainers_losers = AsyncMock(
+            side_effect=[
+                [{"ticker": "SPY"}, {"ticker": "AAPL"}],
+                [{"ticker": "SPY"}, {"ticker": "MSFT"}],
+            ]
+        )
 
         tickers = await client.get_most_active()
         assert set(tickers) == {"SPY", "AAPL", "MSFT"}

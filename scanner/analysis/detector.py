@@ -1,9 +1,9 @@
 """Signal detection engine — analyzes options snapshots for unusual activity."""
 
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime
 
-from .models import OptionsContract, Signal
+from ..core.models import OptionsContract, Signal
 
 logger = logging.getLogger(__name__)
 
@@ -32,15 +32,16 @@ class Detector:
         # EMA config
         ema_cfg = config.get("ema", {})
         self._ema_alpha = ema_cfg.get("alpha", DEFAULT_EMA_ALPHA)
-        self._max_tracked = ema_cfg.get("max_tracked_contracts", DEFAULT_MAX_TRACKED_CONTRACTS)
+        self._max_tracked = ema_cfg.get(
+            "max_tracked_contracts", DEFAULT_MAX_TRACKED_CONTRACTS
+        )
 
         # Running averages: ticker -> {contract_key -> avg_volume}
         self._avg_volume: dict[str, dict[str, float]] = {}
         self._total_tracked = 0
         self._last_reset_date: str | None = None
 
-    def _contract_key(self, ticker: str, strike: float,
-                      expiry: str, ctype: str) -> str:
+    def _contract_key(self, ticker: str, strike: float, expiry: str, ctype: str) -> str:
         return f"{ticker}:{strike}:{expiry}:{ctype}"
 
     def reset_daily_averages(self):
@@ -68,11 +69,14 @@ class Detector:
         smallest_ticker = min(self._avg_volume, key=lambda t: len(self._avg_volume[t]))
         removed = len(self._avg_volume.pop(smallest_ticker))
         self._total_tracked -= removed
-        logger.debug("Evicted %d entries for ticker %s (total now: %d)",
-                     removed, smallest_ticker, self._total_tracked)
+        logger.debug(
+            "Evicted %d entries for ticker %s (total now: %d)",
+            removed,
+            smallest_ticker,
+            self._total_tracked,
+        )
 
-    def _update_average(self, key: str, volume: int,
-                        ticker: str) -> float:
+    def _update_average(self, key: str, volume: int, ticker: str) -> float:
         """EMA-style running average. Returns the prior average."""
         bucket = self._avg_volume.setdefault(ticker, {})
         prev = bucket.get(key)
@@ -85,8 +89,7 @@ class Detector:
         bucket[key] = new_avg
         return prev
 
-    def analyze_snapshot(self, underlying: str,
-                         contracts: list[dict]) -> list[Signal]:
+    def analyze_snapshot(self, underlying: str, contracts: list[dict]) -> list[Signal]:
         """Analyze a batch of option contract snapshots and return signals."""
         signals = []
         now = datetime.now()
@@ -102,8 +105,9 @@ class Detector:
 
         return signals
 
-    def _evaluate_contract(self, underlying: str, raw: dict,
-                           now: datetime) -> Signal | None:
+    def _evaluate_contract(
+        self, underlying: str, raw: dict, now: datetime
+    ) -> Signal | None:
         """Evaluate a single contract snapshot dict from Polygon."""
         details = raw.get("details", {})
         day = raw.get("day", {})
@@ -205,8 +209,13 @@ class Detector:
             last_price=last_price,
         )
 
-    def _build_description(self, c: OptionsContract, vol_ratio: float,
-                           premium: float, signal_types: list[str]) -> str:
+    def _build_description(
+        self,
+        c: OptionsContract,
+        vol_ratio: float,
+        premium: float,
+        signal_types: list[str],
+    ) -> str:
         sig = Signal(
             timestamp=datetime.now(),
             ticker=c.ticker,

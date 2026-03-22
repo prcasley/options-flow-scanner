@@ -6,7 +6,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Optional
 
-from .models import Signal
+from ..core.models import Signal
 from .patterns import PatternAnalyzer
 
 logger = logging.getLogger(__name__)
@@ -15,6 +15,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class BacktestStats:
     """Aggregated statistics from a backtest run."""
+
     total_signals: int = 0
     total_days: int = 0
     avg_signals_per_day: float = 0.0
@@ -29,6 +30,7 @@ class BacktestStats:
 @dataclass
 class BacktestResult:
     """Full backtest result with stats, filtered signals, and patterns."""
+
     stats: BacktestStats
     signals: list[Signal]
     patterns: list  # list[PatternResult]
@@ -130,22 +132,24 @@ class Backtester:
 
         signals = []
         for row in rows:
-            signals.append(Signal(
-                timestamp=datetime.fromisoformat(row[0]),
-                ticker=row[1],
-                strike=row[2],
-                expiry=row[3],
-                contract_type=row[4],
-                volume=row[5],
-                open_interest=row[6],
-                estimated_premium=row[7],
-                risk_score=row[8],
-                signal_types=row[9].split("|") if row[9] else [],
-                volume_ratio=row[10] or 0.0,
-                oi_ratio=row[11] or 0.0,
-                description=row[12] or "",
-                last_price=row[13] or 0.0,
-            ))
+            signals.append(
+                Signal(
+                    timestamp=datetime.fromisoformat(row[0]),
+                    ticker=row[1],
+                    strike=row[2],
+                    expiry=row[3],
+                    contract_type=row[4],
+                    volume=row[5],
+                    open_interest=row[6],
+                    estimated_premium=row[7],
+                    risk_score=row[8],
+                    signal_types=row[9].split("|") if row[9] else [],
+                    volume_ratio=row[10] or 0.0,
+                    oi_ratio=row[11] or 0.0,
+                    description=row[12] or "",
+                    last_price=row[13] or 0.0,
+                )
+            )
         return signals
 
     def _apply_filters(
@@ -226,7 +230,7 @@ class Backtester:
             f"Trading days: {s.total_days}",
             f"Avg signals/day: {s.avg_signals_per_day}",
             f"Avg risk score: {s.avg_risk_score}/5",
-            f"Total premium: ${s.total_premium_scanned/1e6:.1f}M",
+            f"Total premium: ${s.total_premium_scanned / 1e6:.1f}M",
             "",
             "TOP TICKERS",
             "-" * 40,

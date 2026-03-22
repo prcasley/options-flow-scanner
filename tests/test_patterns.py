@@ -2,15 +2,21 @@
 
 from datetime import datetime, timedelta
 
-import pytest
 
-from scanner.models import Signal
-from scanner.patterns import PatternAnalyzer, PatternResult
+from scanner.core.models import Signal
+from scanner.analysis.patterns import PatternAnalyzer, PatternResult
 
 
-def _make_signal(ticker="AAPL", strike=220.0, contract_type="call",
-                 volume=5000, risk_score=4, premium=1_000_000,
-                 days_ago=0, signal_types=None):
+def _make_signal(
+    ticker="AAPL",
+    strike=220.0,
+    contract_type="call",
+    volume=5000,
+    risk_score=4,
+    premium=1_000_000,
+    days_ago=0,
+    signal_types=None,
+):
     """Helper to create test signals with sensible defaults."""
     return Signal(
         timestamp=datetime(2025, 3, 15, 10, 30) - timedelta(days=days_ago),
@@ -37,9 +43,7 @@ class TestPatternAnalyzer:
 
     def test_detect_repeat_flow(self):
         """Signals with same ticker+contract_type >= min_occurrences trigger repeat_flow."""
-        signals = [
-            _make_signal(days_ago=i) for i in range(4)
-        ]
+        signals = [_make_signal(days_ago=i) for i in range(4)]
         analyzer = PatternAnalyzer(min_occurrences=3)
         results = analyzer.analyze(signals)
         repeat = [r for r in results if r.pattern_type == "repeat_flow"]
@@ -84,11 +88,7 @@ class TestPatternAnalyzer:
 
     def test_detect_cluster_activity(self):
         """Multiple strikes on same ticker on same date triggers cluster."""
-        base = datetime(2025, 3, 15, 10, 0)
-        signals = [
-            _make_signal(strike=200 + i * 5)
-            for i in range(5)
-        ]
+        signals = [_make_signal(strike=200 + i * 5) for i in range(5)]
         analyzer = PatternAnalyzer(min_occurrences=3)
         results = analyzer.analyze(signals)
         clusters = [r for r in results if r.pattern_type == "cluster"]
@@ -97,9 +97,7 @@ class TestPatternAnalyzer:
 
     def test_detect_high_conviction(self):
         """Repeated risk 4+ signals on same ticker triggers high_conviction."""
-        signals = [
-            _make_signal(risk_score=5, days_ago=i) for i in range(4)
-        ]
+        signals = [_make_signal(risk_score=5, days_ago=i) for i in range(4)]
         analyzer = PatternAnalyzer(min_occurrences=3)
         results = analyzer.analyze(signals)
         hc = [r for r in results if r.pattern_type == "high_conviction"]
@@ -108,9 +106,7 @@ class TestPatternAnalyzer:
 
     def test_high_conviction_ignores_low_risk(self):
         """Risk < 4 signals should not appear in high_conviction."""
-        signals = [
-            _make_signal(risk_score=2, days_ago=i) for i in range(5)
-        ]
+        signals = [_make_signal(risk_score=2, days_ago=i) for i in range(5)]
         analyzer = PatternAnalyzer(min_occurrences=3)
         results = analyzer.analyze(signals)
         hc = [r for r in results if r.pattern_type == "high_conviction"]
@@ -118,10 +114,9 @@ class TestPatternAnalyzer:
 
     def test_results_sorted_by_occurrences(self):
         """Results should be sorted by occurrences descending."""
-        signals = (
-            [_make_signal(ticker="AAPL", days_ago=i) for i in range(5)] +
-            [_make_signal(ticker="TSLA", days_ago=i) for i in range(3)]
-        )
+        signals = [_make_signal(ticker="AAPL", days_ago=i) for i in range(5)] + [
+            _make_signal(ticker="TSLA", days_ago=i) for i in range(3)
+        ]
         analyzer = PatternAnalyzer(min_occurrences=3)
         results = analyzer.analyze(signals)
         if len(results) >= 2:
@@ -129,10 +124,10 @@ class TestPatternAnalyzer:
 
     def test_multiple_tickers(self):
         """Patterns from different tickers both appear."""
-        signals = (
-            [_make_signal(ticker="AAPL", days_ago=i) for i in range(4)] +
-            [_make_signal(ticker="TSLA", contract_type="put", days_ago=i) for i in range(4)]
-        )
+        signals = [_make_signal(ticker="AAPL", days_ago=i) for i in range(4)] + [
+            _make_signal(ticker="TSLA", contract_type="put", days_ago=i)
+            for i in range(4)
+        ]
         analyzer = PatternAnalyzer(min_occurrences=3)
         results = analyzer.analyze(signals)
         tickers = {r.ticker for r in results}

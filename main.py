@@ -11,14 +11,14 @@ from pathlib import Path
 import yaml
 from dotenv import load_dotenv
 
-from scanner.alerts import AlertManager
-from scanner.channels import DiscordChannel, SlackChannel, MultiChannelDispatcher
-from scanner.dashboard import DashboardServer
-from scanner.database import SignalDatabase
-from scanner.detector import Detector
-from scanner.health import HealthServer
-from scanner.polygon_client import PolygonClient
-from scanner.scheduler import Scanner
+from scanner.alerts.channels import DiscordChannel, MultiChannelDispatcher, SlackChannel
+from scanner.alerts.manager import AlertManager
+from scanner.analysis.detector import Detector
+from scanner.core.database import SignalDatabase
+from scanner.core.scheduler import Scanner
+from scanner.dashboard.health import HealthServer
+from scanner.dashboard.server import DashboardServer
+from scanner.sources.polygon_client import PolygonClient
 
 # Load .env from project root
 load_dotenv(Path(__file__).parent / ".env")
@@ -55,21 +55,34 @@ def validate_config(config: dict) -> list[str]:
     if not isinstance(thresholds, dict):
         errors.append("'thresholds' must be a mapping")
     else:
-        for key in ("volume_spike_multiplier", "min_volume", "min_oi",
-                     "high_volume_oi_ratio", "min_estimated_premium_usd",
-                     "sweep_size_threshold"):
+        for key in (
+            "volume_spike_multiplier",
+            "min_volume",
+            "min_oi",
+            "high_volume_oi_ratio",
+            "min_estimated_premium_usd",
+            "sweep_size_threshold",
+        ):
             val = thresholds.get(key)
             if val is not None and (not isinstance(val, (int, float)) or val < 0):
                 errors.append(f"'thresholds.{key}' must be a non-negative number")
 
     risk = config.get("risk_scoring", {})
     if isinstance(risk, dict):
-        weight_sum = sum(risk.get(k, 0) for k in (
-            "volume_spike_weight", "premium_weight", "oi_ratio_weight",
-            "sweep_weight", "near_expiry_weight",
-        ))
+        weight_sum = sum(
+            risk.get(k, 0)
+            for k in (
+                "volume_spike_weight",
+                "premium_weight",
+                "oi_ratio_weight",
+                "sweep_weight",
+                "near_expiry_weight",
+            )
+        )
         if abs(weight_sum - 1.0) > 0.01:
-            errors.append(f"Risk scoring weights sum to {weight_sum:.2f}, expected ~1.0")
+            errors.append(
+                f"Risk scoring weights sum to {weight_sum:.2f}, expected ~1.0"
+            )
 
     market = config.get("market", {})
     if isinstance(market, dict):
@@ -129,7 +142,9 @@ async def main():
     # Validate environment
     api_key = os.getenv("POLYGON_API_KEY")
     if not api_key:
-        logger.error("POLYGON_API_KEY not set. Copy .env.example to .env and add your key.")
+        logger.error(
+            "POLYGON_API_KEY not set. Copy .env.example to .env and add your key."
+        )
         sys.exit(1)
 
     webhook_url = os.getenv("DISCORD_WEBHOOK_URL", "")
@@ -170,10 +185,11 @@ async def main():
         logger.info("Slack alerts enabled")
 
     # Web dashboard
-    dashboard = DashboardServer(health, db)
+    DashboardServer(health, db)
 
-    scanner = Scanner(config, polygon, detector, alerts, db,
-                      health=health, dispatcher=dispatcher)
+    scanner = Scanner(
+        config, polygon, detector, alerts, db, health=health, dispatcher=dispatcher
+    )
 
     # Graceful shutdown
     loop = asyncio.get_running_loop()
@@ -189,8 +205,10 @@ async def main():
     logger.info("=" * 60)
     logger.info("Options Flow Scanner starting")
     logger.info("Watchlist: %s", ", ".join(config.get("watchlist", [])))
-    logger.info("Discovery mode: %s",
-                "ON" if config.get("discovery", {}).get("enabled") else "OFF")
+    logger.info(
+        "Discovery mode: %s",
+        "ON" if config.get("discovery", {}).get("enabled") else "OFF",
+    )
     logger.info("Scan interval: %ds", config.get("scan_interval_seconds", 60))
     logger.info("=" * 60)
 

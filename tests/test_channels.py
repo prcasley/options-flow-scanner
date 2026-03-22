@@ -3,16 +3,15 @@
 from datetime import datetime
 from unittest.mock import AsyncMock, MagicMock, patch
 
-import pytest
 
-from scanner.channels import (
+from scanner.alerts.channels import (
     AlertChannel,
     DiscordChannel,
     SlackChannel,
     EmailChannel,
     MultiChannelDispatcher,
 )
-from scanner.models import Signal
+from scanner.core.models import Signal
 
 
 def _make_signal(ticker="AAPL", risk_score=4):
@@ -44,7 +43,7 @@ class TestDiscordChannel:
         ch = DiscordChannel("https://discord.com/api/webhooks/test")
         long_msg = "x" * 3000
 
-        with patch("scanner.channels.aiohttp.ClientSession") as mock_session_cls:
+        with patch("scanner.alerts.channels.aiohttp.ClientSession") as mock_session_cls:
             mock_resp = AsyncMock()
             mock_resp.status = 204
             mock_post = AsyncMock(return_value=mock_resp)
@@ -95,7 +94,7 @@ class TestEmailChannel:
             to_addrs=["to@example.com"],
             use_tls=True,
         )
-        with patch("scanner.channels.smtplib.SMTP") as mock_smtp:
+        with patch("scanner.alerts.channels.smtplib.SMTP") as mock_smtp:
             mock_server = MagicMock()
             mock_smtp.return_value.__enter__ = MagicMock(return_value=mock_server)
             mock_smtp.return_value.__exit__ = MagicMock(return_value=False)
@@ -114,7 +113,7 @@ class TestEmailChannel:
             to_addrs=["to@example.com"],
             use_tls=False,
         )
-        with patch("scanner.channels.smtplib.SMTP") as mock_smtp:
+        with patch("scanner.alerts.channels.smtplib.SMTP") as mock_smtp:
             mock_server = MagicMock()
             mock_smtp.return_value.__enter__ = MagicMock(return_value=mock_server)
             mock_smtp.return_value.__exit__ = MagicMock(return_value=False)
@@ -124,9 +123,12 @@ class TestEmailChannel:
 
     async def test_send_handles_error(self):
         ch = EmailChannel(
-            smtp_host="smtp.example.com", smtp_port=587,
-            username="user", password="pass",
-            from_addr="from@example.com", to_addrs=["to@example.com"],
+            smtp_host="smtp.example.com",
+            smtp_port=587,
+            username="user",
+            password="pass",
+            from_addr="from@example.com",
+            to_addrs=["to@example.com"],
         )
         with patch.object(ch, "_send_email", side_effect=Exception("SMTP error")):
             # Should not raise
@@ -134,9 +136,12 @@ class TestEmailChannel:
 
     async def test_send_batch_empty(self):
         ch = EmailChannel(
-            smtp_host="smtp.example.com", smtp_port=587,
-            username="user", password="pass",
-            from_addr="from@example.com", to_addrs=["to@example.com"],
+            smtp_host="smtp.example.com",
+            smtp_port=587,
+            username="user",
+            password="pass",
+            from_addr="from@example.com",
+            to_addrs=["to@example.com"],
         )
         # Empty signals should return early
         await ch.send_batch([])

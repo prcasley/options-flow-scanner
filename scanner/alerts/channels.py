@@ -3,16 +3,22 @@
 import logging
 import smtplib
 import ssl
-from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
 
 import aiohttp
 
-from .models import Signal
+from ..core.models import Signal
 
 logger = logging.getLogger(__name__)
 
-RISK_EMOJI = {1: "\u26aa", 2: "\ud83d\udfe2", 3: "\ud83d\udfe1", 4: "\ud83d\udfe0", 5: "\ud83d\udd34"}
+RISK_EMOJI = {
+    1: "\u26aa",
+    2: "\ud83d\udfe2",
+    3: "\ud83d\udfe1",
+    4: "\ud83d\udfe0",
+    5: "\ud83d\udd34",
+}
 
 
 class AlertChannel:
@@ -53,7 +59,7 @@ class DiscordChannel(AlertChannel):
 
     async def send_batch(self, signals: list[Signal]):
         for i in range(0, len(signals), 10):
-            batch = signals[i:i + 10]
+            batch = signals[i : i + 10]
             lines = ["**\ud83d\udea8 Options Flow Alert**\n"]
             for s in batch:
                 emoji = RISK_EMOJI.get(s.risk_score, "\u26aa")
@@ -91,7 +97,7 @@ class SlackChannel(AlertChannel):
 
     async def send_batch(self, signals: list[Signal]):
         for i in range(0, len(signals), 10):
-            batch = signals[i:i + 10]
+            batch = signals[i : i + 10]
             blocks = [":rotating_light: *Options Flow Alert*\n"]
             for s in batch:
                 risk_bar = "\u2588" * s.risk_score + "\u2591" * (5 - s.risk_score)
@@ -106,9 +112,16 @@ class SlackChannel(AlertChannel):
 class EmailChannel(AlertChannel):
     """Send alert digests via SMTP email."""
 
-    def __init__(self, smtp_host: str, smtp_port: int, username: str,
-                 password: str, from_addr: str, to_addrs: list[str],
-                 use_tls: bool = True):
+    def __init__(
+        self,
+        smtp_host: str,
+        smtp_port: int,
+        username: str,
+        password: str,
+        from_addr: str,
+        to_addrs: list[str],
+        use_tls: bool = True,
+    ):
         self.smtp_host = smtp_host
         self.smtp_port = smtp_port
         self.username = username
@@ -127,14 +140,14 @@ class EmailChannel(AlertChannel):
         if not signals:
             return
         lines = ["Options Flow Scanner - Signal Alert\n"]
-        lines.append(f"{'='*60}\n")
+        lines.append(f"{'=' * 60}\n")
         for s in signals:
             lines.append(
                 f"[Risk {s.risk_score}/5] {s.description}\n"
                 f"  Volume: {s.volume:,} | OI: {s.open_interest:,} | "
                 f"Premium: {s.premium_str} | V/OI: {s.oi_ratio:.1f}\n"
             )
-        lines.append(f"\n{'='*60}")
+        lines.append(f"\n{'=' * 60}")
         lines.append(f"Total signals: {len(signals)}")
         try:
             self._send_email(

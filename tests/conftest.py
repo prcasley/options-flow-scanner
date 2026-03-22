@@ -1,12 +1,11 @@
 """Shared fixtures for the options flow scanner test suite."""
 
-import asyncio
 from datetime import datetime
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock
 
 import pytest
 
-from scanner.models import Signal
+from scanner.core.models import Signal
 
 
 @pytest.fixture
