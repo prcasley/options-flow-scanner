@@ -1,0 +1,700 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Options Flow Scanner — Real-Time Unusual Activity Dashboard</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+<style>
+/* ── Reset & Base ─────────────────────────────────────────── */
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg-primary:#0a0e17;--bg-card:#111827;--bg-card-alt:#1a2236;--bg-input:#0d1321;
+  --border:#1e293b;--border-accent:#2563eb33;
+  --text-primary:#e2e8f0;--text-secondary:#94a3b8;--text-muted:#64748b;
+  --accent:#3b82f6;--accent-glow:#3b82f640;
+  --green:#10b981;--green-bg:#10b98118;--red:#ef4444;--red-bg:#ef444418;
+  --amber:#f59e0b;--amber-bg:#f59e0b18;--purple:#a78bfa;--purple-bg:#a78bfa18;
+  --cyan:#06b6d4;--cyan-bg:#06b6d418;
+  --radius:10px;--radius-sm:6px;
+  --font-mono:'SF Mono','Cascadia Code','Fira Code',Consolas,monospace;
+  --font-sans:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
+}
+html{font-size:14px;scroll-behavior:smooth}
+body{background:var(--bg-primary);color:var(--text-primary);font-family:var(--font-sans);line-height:1.5;min-height:100vh;overflow-x:hidden}
+a{color:var(--accent);text-decoration:none}
+a:hover{text-decoration:underline}
+
+/* ── Scrollbar ────────────────────────────────────────────── */
+::-webkit-scrollbar{width:6px;height:6px}
+::-webkit-scrollbar-track{background:var(--bg-primary)}
+::-webkit-scrollbar-thumb{background:var(--text-muted);border-radius:3px}
+
+/* ── Layout ───────────────────────────────────────────────── */
+.topbar{display:flex;align-items:center;justify-content:space-between;padding:.75rem 1.5rem;background:var(--bg-card);border-bottom:1px solid var(--border);position:sticky;top:0;z-index:100;backdrop-filter:blur(12px)}
+.topbar-left{display:flex;align-items:center;gap:.75rem}
+.logo{width:32px;height:32px;border-radius:8px;background:linear-gradient(135deg,var(--accent),var(--purple));display:flex;align-items:center;justify-content:center;font-weight:800;font-size:1rem;color:#fff}
+.topbar h1{font-size:1.1rem;font-weight:700;letter-spacing:-.02em}
+.topbar h1 span{color:var(--accent)}
+.topbar-right{display:flex;align-items:center;gap:1rem}
+.badge{display:inline-flex;align-items:center;gap:.35rem;padding:.2rem .6rem;border-radius:20px;font-size:.75rem;font-weight:600}
+.badge-live{background:var(--green-bg);color:var(--green)}
+.badge-live::before{content:'';width:6px;height:6px;border-radius:50%;background:var(--green);animation:pulse-dot 2s infinite}
+@keyframes pulse-dot{0%,100%{opacity:1}50%{opacity:.3}}
+.badge-count{background:var(--accent);color:#fff;min-width:20px;text-align:center}
+.clock{font-family:var(--font-mono);font-size:.85rem;color:var(--text-secondary)}
+
+.container{max-width:1600px;margin:0 auto;padding:1rem 1.5rem 3rem}
+
+/* ── Grid ─────────────────────────────────────────────────── */
+.grid{display:grid;gap:1rem}
+.grid-4{grid-template-columns:repeat(4,1fr)}
+.grid-3{grid-template-columns:repeat(3,1fr)}
+.grid-2{grid-template-columns:1fr 1fr}
+.grid-2-1{grid-template-columns:2fr 1fr}
+.grid-1-2{grid-template-columns:1fr 2fr}
+.grid-sidebar{grid-template-columns:340px 1fr}
+@media(max-width:1200px){.grid-4{grid-template-columns:repeat(2,1fr)}.grid-3,.grid-2-1,.grid-1-2,.grid-sidebar{grid-template-columns:1fr}}
+@media(max-width:768px){.grid-4,.grid-2{grid-template-columns:1fr}}
+
+/* ── Card ─────────────────────────────────────────────────── */
+.card{background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden}
+.card-header{display:flex;align-items:center;justify-content:space-between;padding:.75rem 1rem;border-bottom:1px solid var(--border);background:var(--bg-card-alt)}
+.card-header h2{font-size:.85rem;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--text-secondary)}
+.card-body{padding:1rem}
+.card-glow{box-shadow:0 0 30px var(--accent-glow)}
+
+/* ── Stats Cards ──────────────────────────────────────────── */
+.stat-card{padding:1rem 1.25rem}
+.stat-card .label{font-size:.75rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:.35rem}
+.stat-card .value{font-size:1.6rem;font-weight:700;font-family:var(--font-mono);letter-spacing:-.03em}
+.stat-card .change{font-size:.8rem;margin-top:.25rem}
+.stat-card .change.up{color:var(--green)}
+.stat-card .change.down{color:var(--red)}
+.stat-card .icon{width:36px;height:36px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:1.1rem;margin-bottom:.5rem}
+
+/* ── Signal Table ─────────────────────────────────────────── */
+.signal-table{width:100%;border-collapse:collapse;font-size:.85rem}
+.signal-table th{text-align:left;padding:.55rem .75rem;color:var(--text-muted);font-weight:600;text-transform:uppercase;font-size:.7rem;letter-spacing:.06em;border-bottom:1px solid var(--border);position:sticky;top:0;background:var(--bg-card)}
+.signal-table td{padding:.55rem .75rem;border-bottom:1px solid var(--border);white-space:nowrap}
+.signal-table tr:hover td{background:var(--bg-card-alt)}
+.signal-table .mono{font-family:var(--font-mono);font-size:.8rem}
+.signal-table .ticker{font-weight:700;color:#fff}
+.contract-type{display:inline-block;padding:.1rem .4rem;border-radius:4px;font-size:.7rem;font-weight:700;text-transform:uppercase}
+.contract-type.call{background:var(--green-bg);color:var(--green)}
+.contract-type.put{background:var(--red-bg);color:var(--red)}
+.risk-bar{display:flex;gap:2px}
+.risk-pip{width:8px;height:14px;border-radius:2px;background:var(--border)}
+.risk-pip.filled-1,.risk-pip.filled-2{background:var(--green)}
+.risk-pip.filled-3{background:var(--amber)}
+.risk-pip.filled-4,.risk-pip.filled-5{background:var(--red)}
+.tag{display:inline-block;padding:.1rem .4rem;border-radius:4px;font-size:.65rem;font-weight:600;margin-right:.25rem;text-transform:uppercase}
+.tag-sweep{background:#6366f118;color:#818cf8}
+.tag-block{background:var(--purple-bg);color:var(--purple)}
+.tag-spike{background:var(--amber-bg);color:var(--amber)}
+.tag-highoi{background:var(--cyan-bg);color:var(--cyan)}
+.tag-expiry{background:var(--red-bg);color:var(--red)}
+
+.table-wrap{max-height:420px;overflow-y:auto}
+
+/* ── Signal Cards (compact) ───────────────────────────────── */
+.signal-card{padding:.85rem 1rem;border-bottom:1px solid var(--border);transition:background .15s}
+.signal-card:hover{background:var(--bg-card-alt)}
+.signal-card:last-child{border-bottom:none}
+.signal-card-top{display:flex;align-items:center;justify-content:space-between;margin-bottom:.35rem}
+.signal-card-ticker{font-weight:700;font-size:1rem;color:#fff}
+.signal-card-premium{font-family:var(--font-mono);font-weight:700;color:var(--green)}
+.signal-card-contract{font-size:.8rem;color:var(--text-secondary);margin-bottom:.35rem}
+.signal-card-meta{display:flex;gap:.5rem;flex-wrap:wrap}
+
+/* ── Health Panel ─────────────────────────────────────────── */
+.health-row{display:flex;align-items:center;justify-content:space-between;padding:.6rem 0;border-bottom:1px solid var(--border)}
+.health-row:last-child{border-bottom:none}
+.health-label{font-size:.85rem;color:var(--text-secondary)}
+.health-value{font-family:var(--font-mono);font-size:.85rem;font-weight:600}
+.status-dot{width:8px;height:8px;border-radius:50%;display:inline-block;margin-right:.4rem}
+.status-dot.ok{background:var(--green)}
+.status-dot.warn{background:var(--amber)}
+.status-dot.err{background:var(--red)}
+.progress-bar{width:100%;height:6px;background:var(--border);border-radius:3px;overflow:hidden;margin-top:.3rem}
+.progress-fill{height:100%;border-radius:3px;transition:width .6s ease}
+
+/* ── Alert Config ─────────────────────────────────────────── */
+.channel-row{display:flex;align-items:center;gap:.75rem;padding:.65rem 0;border-bottom:1px solid var(--border)}
+.channel-row:last-child{border-bottom:none}
+.channel-icon{width:32px;height:32px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:1rem;flex-shrink:0}
+.channel-icon.discord{background:#5865f218;color:#5865f2}
+.channel-icon.slack{background:#e01e5a18;color:#e01e5a}
+.channel-icon.email{background:var(--amber-bg);color:var(--amber)}
+.channel-icon.csv{background:var(--green-bg);color:var(--green)}
+.channel-info{flex:1}
+.channel-name{font-weight:600;font-size:.85rem}
+.channel-detail{font-size:.75rem;color:var(--text-muted)}
+.toggle{width:36px;height:20px;border-radius:10px;background:var(--border);position:relative;cursor:pointer;flex-shrink:0}
+.toggle.active{background:var(--green)}
+.toggle::after{content:'';width:16px;height:16px;border-radius:50%;background:#fff;position:absolute;top:2px;left:2px;transition:transform .2s}
+.toggle.active::after{transform:translateX(16px)}
+
+/* ── Pattern Section ──────────────────────────────────────── */
+.pattern-card{padding:.85rem 1rem;border-left:3px solid var(--accent);margin-bottom:.65rem;background:var(--bg-card-alt);border-radius:0 var(--radius-sm) var(--radius-sm) 0}
+.pattern-title{font-weight:700;font-size:.9rem;margin-bottom:.25rem}
+.pattern-desc{font-size:.8rem;color:var(--text-secondary);line-height:1.5}
+.pattern-stat{font-family:var(--font-mono);font-weight:600;font-size:.85rem;margin-top:.3rem}
+
+/* ── Backtest ─────────────────────────────────────────────── */
+.bt-stat{text-align:center;padding:.75rem}
+.bt-stat .label{font-size:.7rem;text-transform:uppercase;color:var(--text-muted);letter-spacing:.05em;margin-bottom:.25rem}
+.bt-stat .value{font-size:1.3rem;font-weight:700;font-family:var(--font-mono)}
+.bt-stat .value.positive{color:var(--green)}
+.bt-stat .value.negative{color:var(--red)}
+.bt-trade{display:flex;justify-content:space-between;align-items:center;padding:.5rem .75rem;border-bottom:1px solid var(--border);font-size:.8rem}
+.bt-trade:last-child{border-bottom:none}
+
+/* ── Chart containers ─────────────────────────────────────── */
+.chart-container{position:relative;height:280px;padding:.5rem}
+
+/* ── Section heading ──────────────────────────────────────── */
+.section-title{font-size:.95rem;font-weight:700;margin:1.75rem 0 .75rem;display:flex;align-items:center;gap:.5rem}
+.section-title::before{content:'';width:3px;height:18px;border-radius:2px;background:var(--accent)}
+
+/* ── Footer ───────────────────────────────────────────────── */
+.footer{text-align:center;padding:2rem 1rem 1rem;color:var(--text-muted);font-size:.8rem;border-top:1px solid var(--border);margin-top:2rem}
+.footer a{color:var(--accent)}
+
+/* ── Utility ──────────────────────────────────────────────── */
+.text-green{color:var(--green)}.text-red{color:var(--red)}.text-amber{color:var(--amber)}.text-purple{color:var(--purple)}.text-cyan{color:var(--cyan)}
+.mb-1{margin-bottom:1rem}
+.text-mono{font-family:var(--font-mono)}
+.text-sm{font-size:.8rem}
+.text-muted{color:var(--text-muted)}
+
+/* ── Animations ───────────────────────────────────────────── */
+@keyframes fadein{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+.card{animation:fadein .4s ease both}
+.card:nth-child(2){animation-delay:.05s}
+.card:nth-child(3){animation-delay:.1s}
+.card:nth-child(4){animation-delay:.15s}
+
+/* ── Scanlines overlay ────────────────────────────────────── */
+body::after{content:'';position:fixed;inset:0;pointer-events:none;background:repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,0,0,.03) 2px,rgba(0,0,0,.03) 4px);z-index:9999}
+</style>
+</head>
+<body>
+
+<!-- ═══════════════ TOP BAR ═══════════════ -->
+<div class="topbar">
+  <div class="topbar-left">
+    <div class="logo">OF</div>
+    <h1>Options <span>Flow Scanner</span></h1>
+  </div>
+  <div class="topbar-right">
+    <span class="badge badge-live">SCANNING</span>
+    <span class="badge badge-count" id="signal-count">47</span>
+    <span class="clock" id="clock">15:42:18 ET</span>
+  </div>
+</div>
+
+<div class="container">
+
+<!-- ═══════════════ STAT CARDS ═══════════════ -->
+<div class="grid grid-4 mb-1" style="margin-top:1rem">
+  <div class="card stat-card">
+    <div class="icon" style="background:var(--green-bg);color:var(--green)">&#9650;</div>
+    <div class="label">Signals Today</div>
+    <div class="value">47</div>
+    <div class="change up">+12 vs yesterday</div>
+  </div>
+  <div class="card stat-card">
+    <div class="icon" style="background:var(--amber-bg);color:var(--amber)">$</div>
+    <div class="label">Total Premium Flagged</div>
+    <div class="value">$24.7M</div>
+    <div class="change up">+$3.2M vs avg</div>
+  </div>
+  <div class="card stat-card">
+    <div class="icon" style="background:var(--purple-bg);color:var(--purple)">&#9733;</div>
+    <div class="label">High Conviction (4-5)</div>
+    <div class="value">12</div>
+    <div class="change up">8 calls &middot; 4 puts</div>
+  </div>
+  <div class="card stat-card">
+    <div class="icon" style="background:var(--cyan-bg);color:var(--cyan)">&#8644;</div>
+    <div class="label">Sweeps Detected</div>
+    <div class="value">18</div>
+    <div class="change">Across 9 tickers</div>
+  </div>
+</div>
+
+<!-- ═══════════════ MAIN GRID ═══════════════ -->
+<div class="section-title">Live Signal Feed</div>
+<div class="grid grid-sidebar mb-1">
+
+  <!-- LEFT: Signal cards -->
+  <div class="card" style="max-height:540px;overflow-y:auto" id="signal-cards-panel">
+    <div class="card-header">
+      <h2>Latest Signals</h2>
+      <span class="text-sm text-muted" id="last-update">Updated 2s ago</span>
+    </div>
+    <div id="signal-cards"></div>
+  </div>
+
+  <!-- RIGHT: Full table -->
+  <div class="card">
+    <div class="card-header">
+      <h2>All Unusual Activity</h2>
+      <span class="text-sm text-muted">47 signals &middot; sorted by risk</span>
+    </div>
+    <div class="table-wrap">
+      <table class="signal-table" id="signal-table">
+        <thead>
+          <tr><th>Time</th><th>Ticker</th><th>Contract</th><th>Type</th><th>Volume</th><th>Premium</th><th>V/Avg</th><th>Risk</th><th>Tags</th></tr>
+        </thead>
+        <tbody id="signal-table-body"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════ CHARTS ROW ═══════════════ -->
+<div class="section-title">Market Analytics</div>
+<div class="grid grid-2 mb-1">
+  <div class="card">
+    <div class="card-header"><h2>Premium Flow by Ticker</h2><span class="text-sm text-muted">Today</span></div>
+    <div class="chart-container"><canvas id="chart-premium"></canvas></div>
+  </div>
+  <div class="card">
+    <div class="card-header"><h2>Signal Volume (Intraday)</h2><span class="text-sm text-muted">30-min buckets</span></div>
+    <div class="chart-container"><canvas id="chart-intraday"></canvas></div>
+  </div>
+</div>
+
+<div class="grid grid-2 mb-1">
+  <div class="card">
+    <div class="card-header"><h2>Call / Put Flow Ratio</h2><span class="text-sm text-muted">Last 5 sessions</span></div>
+    <div class="chart-container"><canvas id="chart-callput"></canvas></div>
+  </div>
+  <div class="card">
+    <div class="card-header"><h2>Risk Score Distribution</h2><span class="text-sm text-muted">Today&rsquo;s signals</span></div>
+    <div class="chart-container"><canvas id="chart-risk"></canvas></div>
+  </div>
+</div>
+
+<!-- ═══════════════ HEALTH / ALERTS / PATTERNS ═══════════════ -->
+<div class="section-title">System Status &amp; Configuration</div>
+<div class="grid grid-3 mb-1">
+
+  <!-- Health -->
+  <div class="card">
+    <div class="card-header"><h2>Scanner Health</h2><span class="badge badge-live" style="font-size:.65rem">ONLINE</span></div>
+    <div class="card-body">
+      <div class="health-row"><span class="health-label"><span class="status-dot ok"></span>Polygon API</span><span class="health-value text-green">Connected</span></div>
+      <div class="health-row"><span class="health-label"><span class="status-dot ok"></span>Detection Engine</span><span class="health-value text-green">Running</span></div>
+      <div class="health-row"><span class="health-label"><span class="status-dot ok"></span>SQLite Database</span><span class="health-value text-green">Healthy</span></div>
+      <div class="health-row"><span class="health-label"><span class="status-dot ok"></span>Web Dashboard</span><span class="health-value text-green">:8080</span></div>
+      <div class="health-row">
+        <span class="health-label">API Rate Limit</span>
+        <span class="health-value">3/5 calls</span>
+      </div>
+      <div class="progress-bar"><div class="progress-fill" style="width:60%;background:var(--amber)"></div></div>
+      <div class="health-row"><span class="health-label">Uptime</span><span class="health-value text-mono">6h 42m 18s</span></div>
+      <div class="health-row"><span class="health-label">Memory</span><span class="health-value text-mono">124 MB</span></div>
+      <div class="health-row"><span class="health-label">EMA Cache</span><span class="health-value text-mono">2,847 contracts</span></div>
+      <div class="health-row"><span class="health-label">Scan Cycle</span><span class="health-value text-mono">60s interval</span></div>
+      <div class="health-row"><span class="health-label">Last Scan</span><span class="health-value" id="last-scan">15:42:01 ET</span></div>
+      <div class="health-row"><span class="health-label">Watchlist</span><span class="health-value text-mono">20 tickers</span></div>
+      <div class="health-row"><span class="health-label">Discovery</span><span class="health-value text-green">Enabled (50 max)</span></div>
+    </div>
+  </div>
+
+  <!-- Alert Channels -->
+  <div class="card">
+    <div class="card-header"><h2>Alert Channels</h2><span class="text-sm text-muted">4 active</span></div>
+    <div class="card-body">
+      <div class="channel-row">
+        <div class="channel-icon discord">&#x1f4ac;</div>
+        <div class="channel-info">
+          <div class="channel-name">Discord</div>
+          <div class="channel-detail">#options-flow &middot; Webhook active</div>
+        </div>
+        <div class="toggle active"></div>
+      </div>
+      <div class="channel-row">
+        <div class="channel-icon slack">&#x1f4e2;</div>
+        <div class="channel-info">
+          <div class="channel-name">Slack</div>
+          <div class="channel-detail">#trading-signals &middot; Bot connected</div>
+        </div>
+        <div class="toggle active"></div>
+      </div>
+      <div class="channel-row">
+        <div class="channel-icon email">&#x2709;</div>
+        <div class="channel-info">
+          <div class="channel-name">Email (TLS)</div>
+          <div class="channel-detail">alerts@example.com &middot; SMTP</div>
+        </div>
+        <div class="toggle active"></div>
+      </div>
+      <div class="channel-row">
+        <div class="channel-icon csv">&#x1f4c4;</div>
+        <div class="channel-info">
+          <div class="channel-name">CSV Log</div>
+          <div class="channel-detail">data/alerts.csv &middot; 1,247 rows</div>
+        </div>
+        <div class="toggle active"></div>
+      </div>
+
+      <div style="margin-top:1rem;padding-top:.75rem;border-top:1px solid var(--border)">
+        <div class="text-sm text-muted" style="margin-bottom:.5rem;text-transform:uppercase;letter-spacing:.05em;font-weight:600">Delivery Stats (Today)</div>
+        <div style="display:flex;justify-content:space-between;padding:.3rem 0"><span class="text-sm">Discord messages</span><span class="text-mono text-sm text-green">47 sent</span></div>
+        <div style="display:flex;justify-content:space-between;padding:.3rem 0"><span class="text-sm">Slack messages</span><span class="text-mono text-sm text-green">47 sent</span></div>
+        <div style="display:flex;justify-content:space-between;padding:.3rem 0"><span class="text-sm">Email digests</span><span class="text-mono text-sm text-green">3 batches</span></div>
+        <div style="display:flex;justify-content:space-between;padding:.3rem 0"><span class="text-sm">Failed deliveries</span><span class="text-mono text-sm text-green">0</span></div>
+        <div style="display:flex;justify-content:space-between;padding:.3rem 0"><span class="text-sm">Daily summary</span><span class="text-mono text-sm text-amber">16:15 ET</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Patterns -->
+  <div class="card">
+    <div class="card-header"><h2>Pattern Analysis</h2><span class="text-sm text-muted">4 patterns</span></div>
+    <div class="card-body" style="padding:.65rem">
+      <div class="pattern-card" style="border-color:var(--red)">
+        <div class="pattern-title">&#x1f501; Repeat Flow &mdash; NVDA</div>
+        <div class="pattern-desc">5 separate large-premium call sweeps on NVDA $140C 3/21 in last 90 minutes. Multiple traders targeting same strike.</div>
+        <div class="pattern-stat text-red">5 occurrences &middot; $8.2M total premium</div>
+      </div>
+      <div class="pattern-card" style="border-color:var(--amber)">
+        <div class="pattern-title">&#x1f4c8; Accumulation &mdash; AAPL</div>
+        <div class="pattern-desc">Steady growing call volume on AAPL $195C 3/14 over 4 scan cycles. Each print larger than the last, building conviction.</div>
+        <div class="pattern-stat text-amber">4 cycles &middot; 2.3x volume growth</div>
+      </div>
+      <div class="pattern-card" style="border-color:var(--purple)">
+        <div class="pattern-title">&#x1f3af; Cluster Activity &mdash; TSLA</div>
+        <div class="pattern-desc">3 distinct contracts triggered within 10 minutes on TSLA &mdash; $260C, $265C, and $270C all with 5x+ volume. Coordinated positioning across strike ladder.</div>
+        <div class="pattern-stat text-purple">3 strikes &middot; $4.1M cluster premium</div>
+      </div>
+      <div class="pattern-card" style="border-color:var(--green)">
+        <div class="pattern-title">&#x1f525; High Conviction &mdash; SPY</div>
+        <div class="pattern-desc">2 risk-score-5 signals on SPY $585P 2/14. Massive put sweep near expiry with 12x volume and $3.8M premium. Possible hedge or directional bet.</div>
+        <div class="pattern-stat text-green">Risk 5 &middot; $3.8M &middot; Expires tomorrow</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════ BACKTESTING ═══════════════ -->
+<div class="section-title">Backtesting Results</div>
+<div class="grid grid-2-1 mb-1">
+  <div class="card">
+    <div class="card-header"><h2>30-Day Backtest &mdash; All Signals</h2><span class="text-sm text-muted">Jan 13 &ndash; Feb 12, 2026</span></div>
+    <div class="grid grid-4" style="border-bottom:1px solid var(--border)">
+      <div class="bt-stat"><div class="label">Total Signals</div><div class="value">892</div></div>
+      <div class="bt-stat"><div class="label">Win Rate</div><div class="value positive">67.3%</div></div>
+      <div class="bt-stat"><div class="label">Avg Return</div><div class="value positive">+18.4%</div></div>
+      <div class="bt-stat"><div class="label">Sharpe Ratio</div><div class="value positive">2.14</div></div>
+    </div>
+    <div class="grid grid-4" style="border-bottom:1px solid var(--border)">
+      <div class="bt-stat"><div class="label">Total P&amp;L</div><div class="value positive">+$142.8K</div></div>
+      <div class="bt-stat"><div class="label">Max Drawdown</div><div class="value negative">-12.1%</div></div>
+      <div class="bt-stat"><div class="label">Best Day</div><div class="value positive">+$28.4K</div></div>
+      <div class="bt-stat"><div class="label">Worst Day</div><div class="value negative">-$11.2K</div></div>
+    </div>
+    <div class="chart-container" style="height:220px"><canvas id="chart-equity"></canvas></div>
+  </div>
+
+  <div class="card">
+    <div class="card-header"><h2>Top Tickers (P&amp;L)</h2><span class="text-sm text-muted">30-day</span></div>
+    <div>
+      <div class="bt-trade"><span class="ticker">NVDA</span><span class="text-mono text-green">+$38,420</span></div>
+      <div class="bt-trade"><span class="ticker">AAPL</span><span class="text-mono text-green">+$24,180</span></div>
+      <div class="bt-trade"><span class="ticker">SPY</span><span class="text-mono text-green">+$21,750</span></div>
+      <div class="bt-trade"><span class="ticker">TSLA</span><span class="text-mono text-green">+$19,340</span></div>
+      <div class="bt-trade"><span class="ticker">META</span><span class="text-mono text-green">+$15,620</span></div>
+      <div class="bt-trade"><span class="ticker">AMD</span><span class="text-mono text-green">+$12,090</span></div>
+      <div class="bt-trade"><span class="ticker">AMZN</span><span class="text-mono text-green">+$8,740</span></div>
+      <div class="bt-trade"><span class="ticker">QQQ</span><span class="text-mono text-green">+$6,210</span></div>
+      <div class="bt-trade"><span class="ticker">COIN</span><span class="text-mono text-red">-$2,140</span></div>
+      <div class="bt-trade"><span class="ticker">MARA</span><span class="text-mono text-red">-$4,680</span></div>
+    </div>
+    <div style="padding:.75rem 1rem;border-top:1px solid var(--border)">
+      <div class="text-sm text-muted" style="margin-bottom:.4rem;font-weight:600;text-transform:uppercase;letter-spacing:.05em">Filters Applied</div>
+      <div class="text-sm">Risk Score: &ge; 3 &middot; Premium: &ge; $50K</div>
+      <div class="text-sm">Signal Types: All &middot; Tickers: Watchlist</div>
+    </div>
+  </div>
+</div>
+
+<div class="grid grid-3 mb-1">
+  <div class="card">
+    <div class="card-header"><h2>By Signal Type</h2></div>
+    <div>
+      <div class="bt-trade"><span><span class="tag tag-sweep">Sweep</span> Signals</span><span class="text-mono text-green">71.2% win</span></div>
+      <div class="bt-trade"><span><span class="tag tag-spike">Spike</span> Signals</span><span class="text-mono text-green">65.8% win</span></div>
+      <div class="bt-trade"><span><span class="tag tag-highoi">High OI</span> Signals</span><span class="text-mono text-green">63.4% win</span></div>
+      <div class="bt-trade"><span><span class="tag tag-block">Block</span> Signals</span><span class="text-mono text-amber">58.9% win</span></div>
+      <div class="bt-trade"><span><span class="tag tag-expiry">Near Exp</span> Signals</span><span class="text-mono text-amber">52.1% win</span></div>
+    </div>
+  </div>
+  <div class="card">
+    <div class="card-header"><h2>By Risk Score</h2></div>
+    <div>
+      <div class="bt-trade"><span>Risk 5</span><span class="text-mono text-green">78.4% win &middot; +24.6% avg</span></div>
+      <div class="bt-trade"><span>Risk 4</span><span class="text-mono text-green">71.1% win &middot; +19.8% avg</span></div>
+      <div class="bt-trade"><span>Risk 3</span><span class="text-mono text-green">64.7% win &middot; +14.2% avg</span></div>
+      <div class="bt-trade"><span>Risk 2</span><span class="text-mono text-amber">55.3% win &middot; +7.1% avg</span></div>
+      <div class="bt-trade"><span>Risk 1</span><span class="text-mono text-amber">48.9% win &middot; +2.3% avg</span></div>
+    </div>
+  </div>
+  <div class="card">
+    <div class="card-header"><h2>P&amp;L by Day of Week</h2></div>
+    <div class="chart-container" style="height:200px"><canvas id="chart-dow"></canvas></div>
+  </div>
+</div>
+
+<!-- ═══════════════ CONFIG DISPLAY ═══════════════ -->
+<div class="section-title">Detection Configuration</div>
+<div class="grid grid-3 mb-1">
+  <div class="card">
+    <div class="card-header"><h2>Thresholds</h2></div>
+    <div class="card-body">
+      <div class="health-row"><span class="health-label">Volume Spike</span><span class="health-value text-mono">5.0x EMA</span></div>
+      <div class="health-row"><span class="health-label">Min Volume</span><span class="health-value text-mono">100</span></div>
+      <div class="health-row"><span class="health-label">Min Open Interest</span><span class="health-value text-mono">50</span></div>
+      <div class="health-row"><span class="health-label">Vol/OI Ratio</span><span class="health-value text-mono">3.0x</span></div>
+      <div class="health-row"><span class="health-label">Min Premium</span><span class="health-value text-mono">$50,000</span></div>
+      <div class="health-row"><span class="health-label">Sweep Threshold</span><span class="health-value text-mono">100 contracts</span></div>
+    </div>
+  </div>
+  <div class="card">
+    <div class="card-header"><h2>Risk Score Weights</h2></div>
+    <div class="card-body">
+      <div class="health-row"><span class="health-label">Volume Spike</span><span class="health-value text-mono">0.30</span></div>
+      <div class="health-row"><span class="health-label">Premium Size</span><span class="health-value text-mono">0.25</span></div>
+      <div class="health-row"><span class="health-label">OI Ratio</span><span class="health-value text-mono">0.20</span></div>
+      <div class="health-row"><span class="health-label">Sweep</span><span class="health-value text-mono">0.15</span></div>
+      <div class="health-row"><span class="health-label">Near Expiry</span><span class="health-value text-mono">0.10</span></div>
+      <div class="health-row"><span class="health-label">Total</span><span class="health-value text-green">1.00</span></div>
+    </div>
+  </div>
+  <div class="card">
+    <div class="card-header"><h2>Watchlist (20 Tickers)</h2></div>
+    <div class="card-body" style="display:flex;flex-wrap:wrap;gap:.4rem">
+      <span class="tag tag-sweep">SPY</span><span class="tag tag-sweep">QQQ</span><span class="tag tag-sweep">AAPL</span>
+      <span class="tag tag-sweep">MSFT</span><span class="tag tag-sweep">NVDA</span><span class="tag tag-sweep">TSLA</span>
+      <span class="tag tag-sweep">AMZN</span><span class="tag tag-sweep">META</span><span class="tag tag-sweep">GOOGL</span>
+      <span class="tag tag-sweep">AMD</span><span class="tag tag-sweep">AVGO</span><span class="tag tag-sweep">JPM</span>
+      <span class="tag tag-sweep">BAC</span><span class="tag tag-sweep">XLF</span><span class="tag tag-sweep">IWM</span>
+      <span class="tag tag-sweep">NFLX</span><span class="tag tag-sweep">CRM</span><span class="tag tag-sweep">COIN</span>
+      <span class="tag tag-sweep">MARA</span><span class="tag tag-sweep">SMCI</span>
+    </div>
+  </div>
+</div>
+
+</div><!-- /container -->
+
+<div class="footer">
+  <strong>Options Flow Scanner</strong> &mdash; Real-time unusual options activity detection<br>
+  Powered by <a href="https://polygon.io" target="_blank">Polygon.io</a> &middot;
+  <a href="https://github.com/prcasley/options-flow-scanner" target="_blank">GitHub</a> &middot;
+  Built with Python, SQLite, Chart.js
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════
+     JAVASCRIPT — Sample Data & Charts
+     ═══════════════════════════════════════════════════════════ -->
+<script>
+// ── Sample Signal Data ──────────────────────────────────────
+const SIGNALS = [
+  {time:"15:41",ticker:"NVDA",strike:140,expiry:"3/21",type:"call",vol:12400,oi:3200,premium:2850000,ratio:8.2,risk:5,tags:["sweep","spike"]},
+  {time:"15:38",ticker:"SPY",strike:585,expiry:"2/14",type:"put",vol:28500,oi:8400,premium:3800000,ratio:12.1,risk:5,tags:["sweep","near_exp"]},
+  {time:"15:35",ticker:"TSLA",strike:260,expiry:"3/21",type:"call",vol:9800,oi:4100,premium:1420000,ratio:6.7,risk:4,tags:["sweep","spike"]},
+  {time:"15:33",ticker:"AAPL",strike:195,expiry:"3/14",type:"call",vol:7200,oi:5600,premium:980000,ratio:5.4,risk:4,tags:["spike","high_oi"]},
+  {time:"15:30",ticker:"META",strike:620,expiry:"3/21",type:"call",vol:4800,oi:1200,premium:1650000,ratio:7.8,risk:4,tags:["sweep"]},
+  {time:"15:27",ticker:"AMD",strike:170,expiry:"3/14",type:"call",vol:6100,oi:3800,premium:720000,ratio:5.9,risk:4,tags:["spike","high_oi"]},
+  {time:"15:24",ticker:"TSLA",strike:265,expiry:"3/21",type:"call",vol:5400,oi:2900,premium:1180000,ratio:6.1,risk:4,tags:["spike"]},
+  {time:"15:22",ticker:"AMZN",strike:230,expiry:"3/14",type:"call",vol:3200,oi:1800,premium:890000,ratio:5.2,risk:3,tags:["spike"]},
+  {time:"15:19",ticker:"QQQ",strike:520,expiry:"2/21",type:"put",vol:8900,oi:12400,premium:1240000,ratio:5.8,risk:3,tags:["spike"]},
+  {time:"15:17",ticker:"NVDA",strike:145,expiry:"3/21",type:"call",vol:5600,oi:2400,premium:1580000,ratio:6.4,risk:4,tags:["sweep"]},
+  {time:"15:14",ticker:"GOOGL",strike:185,expiry:"3/21",type:"call",vol:3800,oi:2100,premium:640000,ratio:5.1,risk:3,tags:["spike"]},
+  {time:"15:11",ticker:"TSLA",strike:270,expiry:"3/21",type:"call",vol:4200,oi:1500,premium:920000,ratio:5.5,risk:3,tags:["spike"]},
+  {time:"15:08",ticker:"COIN",strike:280,expiry:"3/14",type:"call",vol:2800,oi:900,premium:540000,ratio:7.2,risk:3,tags:["sweep","high_oi"]},
+  {time:"15:05",ticker:"AVGO",strike:220,expiry:"3/21",type:"call",vol:1900,oi:800,premium:1120000,ratio:5.8,risk:3,tags:["spike"]},
+  {time:"15:02",ticker:"JPM",strike:250,expiry:"3/14",type:"call",vol:4100,oi:6200,premium:480000,ratio:5.0,risk:3,tags:["spike"]},
+  {time:"14:58",ticker:"MSFT",strike:430,expiry:"3/21",type:"put",vol:3600,oi:4800,premium:920000,ratio:5.3,risk:3,tags:["spike"]},
+  {time:"14:55",ticker:"XLF",strike:48,expiry:"3/21",type:"call",vol:15200,oi:28000,premium:320000,ratio:6.1,risk:2,tags:["spike"]},
+  {time:"14:52",ticker:"NFLX",strike:950,expiry:"3/14",type:"call",vol:1200,oi:400,premium:780000,ratio:5.4,risk:3,tags:["high_oi"]},
+  {time:"14:48",ticker:"IWM",strike:225,expiry:"2/21",type:"put",vol:6800,oi:9200,premium:410000,ratio:5.1,risk:2,tags:["spike"]},
+  {time:"14:44",ticker:"SMCI",strike:45,expiry:"3/14",type:"call",vol:8400,oi:3600,premium:290000,ratio:8.4,risk:3,tags:["sweep","spike"]},
+  {time:"14:40",ticker:"BAC",strike:46,expiry:"3/21",type:"call",vol:11000,oi:18000,premium:180000,ratio:5.2,risk:2,tags:["spike"]},
+  {time:"14:36",ticker:"CRM",strike:340,expiry:"3/14",type:"call",vol:2100,oi:1400,premium:520000,ratio:5.6,risk:3,tags:["spike"]},
+  {time:"14:32",ticker:"MARA",strike:22,expiry:"3/21",type:"call",vol:18000,oi:9400,premium:210000,ratio:6.8,risk:2,tags:["spike"]},
+  {time:"14:28",ticker:"NVDA",strike:135,expiry:"2/21",type:"put",vol:4800,oi:5600,premium:1040000,ratio:5.1,risk:3,tags:["spike"]},
+  {time:"14:24",ticker:"SPY",strike:590,expiry:"2/14",type:"call",vol:14200,oi:22000,premium:2200000,ratio:5.4,risk:3,tags:["spike","near_exp"]},
+];
+
+// ── Helpers ─────────────────────────────────────────────────
+function fmtPremium(p){return p>=1e6?'$'+(p/1e6).toFixed(1)+'M':p>=1e3?'$'+(p/1e3).toFixed(0)+'K':'$'+p}
+function riskPips(r){let h='';for(let i=1;i<=5;i++)h+=`<span class="risk-pip ${i<=r?'filled-'+r:''}"></span>`;return h}
+function tagHTML(t){const m={sweep:'tag-sweep',spike:'tag-spike',high_oi:'tag-highoi',near_exp:'tag-expiry',block:'tag-block'};const l={sweep:'Sweep',spike:'Vol Spike',high_oi:'High OI',near_exp:'Near Exp',block:'Block'};return `<span class="tag ${m[t]||''}">${l[t]||t}</span>`}
+
+// ── Populate Signal Cards ───────────────────────────────────
+const cardsEl=document.getElementById('signal-cards');
+SIGNALS.slice(0,10).forEach(s=>{
+  cardsEl.innerHTML+=`
+    <div class="signal-card">
+      <div class="signal-card-top">
+        <span><span class="signal-card-ticker">${s.ticker}</span> <span class="contract-type ${s.type}">${s.type}</span></span>
+        <span class="signal-card-premium">${fmtPremium(s.premium)}</span>
+      </div>
+      <div class="signal-card-contract">${s.ticker} ${s.strike}${s.type==='call'?'C':'P'} ${s.expiry} &middot; ${s.ratio}x avg &middot; Vol: ${s.vol.toLocaleString()}</div>
+      <div class="signal-card-meta">${s.tags.map(tagHTML).join('')} <span class="text-sm text-muted">${s.time} ET</span></div>
+    </div>`;
+});
+
+// ── Populate Table ──────────────────────────────────────────
+const tbody=document.getElementById('signal-table-body');
+SIGNALS.forEach(s=>{
+  tbody.innerHTML+=`<tr>
+    <td class="mono">${s.time}</td>
+    <td class="ticker">${s.ticker}</td>
+    <td class="mono">${s.strike}${s.type==='call'?'C':'P'} ${s.expiry}</td>
+    <td><span class="contract-type ${s.type}">${s.type}</span></td>
+    <td class="mono">${s.vol.toLocaleString()}</td>
+    <td class="mono" style="color:var(--green)">${fmtPremium(s.premium)}</td>
+    <td class="mono">${s.ratio}x</td>
+    <td><div class="risk-bar">${riskPips(s.risk)}</div></td>
+    <td>${s.tags.map(tagHTML).join('')}</td>
+  </tr>`;
+});
+
+// ── Clock ───────────────────────────────────────────────────
+function updateClock(){
+  const n=new Date();
+  const h=n.getHours(),m=n.getMinutes(),sec=n.getSeconds();
+  document.getElementById('clock').textContent=
+    `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(sec).padStart(2,'0')} ET`;
+}
+setInterval(updateClock,1000);updateClock();
+
+// ── Chart Defaults ──────────────────────────────────────────
+Chart.defaults.color='#94a3b8';
+Chart.defaults.borderColor='#1e293b';
+Chart.defaults.font.family="-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif";
+Chart.defaults.font.size=11;
+Chart.defaults.plugins.legend.labels.boxWidth=12;
+Chart.defaults.plugins.legend.labels.padding=14;
+
+// ── Premium by Ticker (Horizontal Bar) ──────────────────────
+new Chart(document.getElementById('chart-premium'),{
+  type:'bar',
+  data:{
+    labels:['NVDA','SPY','META','TSLA','AAPL','AVGO','QQQ','AMD','MSFT','NFLX'],
+    datasets:[{
+      label:'Call Premium ($)',
+      data:[5470,2200,1650,3520,980,1120,0,720,0,780],
+      backgroundColor:'#10b98160',borderColor:'#10b981',borderWidth:1
+    },{
+      label:'Put Premium ($)',
+      data:[1040,3800,0,0,0,0,1240,0,920,0],
+      backgroundColor:'#ef444460',borderColor:'#ef4444',borderWidth:1
+    }]
+  },
+  options:{
+    indexAxis:'y',
+    responsive:true,maintainAspectRatio:false,
+    scales:{
+      x:{ticks:{callback:v=>v>=1e6?'$'+(v/1e6).toFixed(1)+'M':v>=1e3?'$'+(v/1e3).toFixed(0)+'K':'$'+v},grid:{color:'#1e293b40'}},
+      y:{grid:{display:false}}
+    },
+    plugins:{legend:{position:'top'},tooltip:{callbacks:{label:c=>c.dataset.label+': '+fmtPremium(c.raw*1000)}}}
+  }
+});
+
+// ── Intraday Signal Volume (Line) ───────────────────────────
+new Chart(document.getElementById('chart-intraday'),{
+  type:'line',
+  data:{
+    labels:['9:30','10:00','10:30','11:00','11:30','12:00','12:30','13:00','13:30','14:00','14:30','15:00','15:30'],
+    datasets:[{
+      label:'Signals',data:[2,5,4,6,3,2,1,3,4,5,6,8,7],
+      borderColor:'#3b82f6',backgroundColor:'#3b82f620',fill:true,tension:.4,pointRadius:3,pointBackgroundColor:'#3b82f6'
+    },{
+      label:'Sweeps',data:[1,2,1,3,1,0,0,1,2,2,3,4,3],
+      borderColor:'#a78bfa',backgroundColor:'#a78bfa15',fill:true,tension:.4,pointRadius:3,pointBackgroundColor:'#a78bfa'
+    }]
+  },
+  options:{responsive:true,maintainAspectRatio:false,scales:{x:{grid:{color:'#1e293b40'}},y:{beginAtZero:true,grid:{color:'#1e293b40'}}},plugins:{legend:{position:'top'}}}
+});
+
+// ── Call/Put Ratio (Stacked Bar) ────────────────────────────
+new Chart(document.getElementById('chart-callput'),{
+  type:'bar',
+  data:{
+    labels:['Mon 2/8','Tue 2/9','Wed 2/10','Thu 2/11','Fri 2/12'],
+    datasets:[
+      {label:'Calls',data:[28,32,24,30,35],backgroundColor:'#10b98180',borderColor:'#10b981',borderWidth:1},
+      {label:'Puts',data:[14,10,18,12,12],backgroundColor:'#ef444480',borderColor:'#ef4444',borderWidth:1}
+    ]
+  },
+  options:{responsive:true,maintainAspectRatio:false,scales:{x:{stacked:true,grid:{display:false}},y:{stacked:true,grid:{color:'#1e293b40'}}},plugins:{legend:{position:'top'}}}
+});
+
+// ── Risk Distribution (Doughnut) ────────────────────────────
+new Chart(document.getElementById('chart-risk'),{
+  type:'doughnut',
+  data:{
+    labels:['Risk 1','Risk 2','Risk 3','Risk 4','Risk 5'],
+    datasets:[{
+      data:[3,7,15,14,8],
+      backgroundColor:['#64748b','#06b6d4','#f59e0b','#ef4444','#dc2626'],
+      borderColor:'#111827',borderWidth:2
+    }]
+  },
+  options:{responsive:true,maintainAspectRatio:false,cutout:'60%',plugins:{legend:{position:'right'}}}
+});
+
+// ── Equity Curve (Backtest) ─────────────────────────────────
+(function(){
+  const days=[];const vals=[0];let cum=0;
+  const dailyPnl=[3200,1800,-2400,4100,2900,-1100,5200,3400,-800,2100,4600,-3200,1900,6800,2400,-1800,3100,5400,-2100,4800,1200,-4200,3600,7200,2800,-1600,4100,3900,5100,2600];
+  for(let i=0;i<30;i++){
+    const d=new Date(2026,0,13+i);
+    if(d.getDay()===0||d.getDay()===6)continue;
+    days.push((d.getMonth()+1)+'/'+d.getDate());
+    cum+=dailyPnl[i]||0;vals.push(cum);
+  }
+  if(days.length>vals.length-1)days.length=vals.length-1;
+  // Align arrays
+  const labels=days.slice(0,vals.length-1);
+  const data=vals.slice(1);
+  new Chart(document.getElementById('chart-equity'),{
+    type:'line',
+    data:{labels,datasets:[{
+      label:'Cumulative P&L',data,
+      borderColor:'#10b981',backgroundColor:ctx=>{const g=ctx.chart.ctx.createLinearGradient(0,0,0,200);g.addColorStop(0,'#10b98130');g.addColorStop(1,'#10b98105');return g},
+      fill:true,tension:.3,pointRadius:2,pointBackgroundColor:'#10b981',borderWidth:2
+    }]},
+    options:{responsive:true,maintainAspectRatio:false,scales:{x:{grid:{display:false},ticks:{maxTicksLimit:10}},y:{grid:{color:'#1e293b40'},ticks:{callback:v=>(v>=0?'+':'')+fmtPremium(Math.abs(v))}}},plugins:{legend:{display:false}}}
+  });
+})();
+
+// ── P&L by Day of Week (Bar) ───────────────────────────────
+new Chart(document.getElementById('chart-dow'),{
+  type:'bar',
+  data:{
+    labels:['Mon','Tue','Wed','Thu','Fri'],
+    datasets:[{
+      label:'Avg P&L',data:[4200,3100,-1200,5800,2400],
+      backgroundColor:v=>v.raw>=0?'#10b98160':'#ef444460',
+      borderColor:v=>v.raw>=0?'#10b981':'#ef4444',
+      borderWidth:1
+    }]
+  },
+  options:{responsive:true,maintainAspectRatio:false,scales:{x:{grid:{display:false}},y:{grid:{color:'#1e293b40'},ticks:{callback:v=>(v>=0?'+$':'−$')+(Math.abs(v)/1e3).toFixed(1)+'K'}}},plugins:{legend:{display:false}}}
+});
+
+// ── Simulated live update counter ───────────────────────────
+let elapsed=2;
+setInterval(()=>{elapsed++;document.getElementById('last-update').textContent=`Updated ${elapsed}s ago`;if(elapsed>58){elapsed=0}},1000);
+</script>
+</body>
+</html>

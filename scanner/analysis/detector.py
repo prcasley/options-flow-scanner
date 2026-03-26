@@ -1,11 +1,15 @@
 """Signal detection engine — analyzes options snapshots for unusual activity."""
 
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime
 
-from .models import OptionsContract, Signal
+from ..core.models import OptionsContract, Signal
 
 logger = logging.getLogger(__name__)
+
+# Default limits for average volume tracking
+DEFAULT_EMA_ALPHA = 0.3
+DEFAULT_MAX_TRACKED_CONTRACTS = 10_000
 
 
 class Detector:
@@ -25,31 +29,71 @@ class Detector:
         self.w_sweep = r.get("sweep_weight", 0.15)
         self.w_expiry = r.get("near_expiry_weight", 0.1)
 
+        # EMA config
+        ema_cfg = config.get("ema", {})
+        self._ema_alpha = ema_cfg.get("alpha", DEFAULT_EMA_ALPHA)
+        self._max_tracked = ema_cfg.get(
+            "max_tracked_contracts", DEFAULT_MAX_TRACKED_CONTRACTS
+        )
+
         # Running averages: ticker -> {contract_key -> avg_volume}
         self._avg_volume: dict[str, dict[str, float]] = {}
+        self._total_tracked = 0
+        self._last_reset_date: str | None = None
 
-    def _contract_key(self, ticker: str, strike: float,
-                      expiry: str, ctype: str) -> str:
+    def _contract_key(self, ticker: str, strike: float, expiry: str, ctype: str) -> str:
         return f"{ticker}:{strike}:{expiry}:{ctype}"
 
-    def _update_average(self, key: str, volume: int,
-                        ticker: str) -> float:
+    def reset_daily_averages(self):
+        """Clear all running averages. Call at the start of each trading day."""
+        count = self._total_tracked
+        self._avg_volume.clear()
+        self._total_tracked = 0
+        logger.info("Reset daily averages (cleared %d tracked contracts)", count)
+
+    def _maybe_reset_for_new_day(self, now: datetime):
+        """Auto-reset averages when a new trading day starts."""
+        today = now.strftime("%Y-%m-%d")
+        if self._last_reset_date != today:
+            if self._last_reset_date is not None:
+                self.reset_daily_averages()
+            self._last_reset_date = today
+
+    def _evict_oldest_if_needed(self):
+        """Evict entries if we exceed the max tracked contracts limit."""
+        if self._total_tracked <= self._max_tracked:
+            return
+        # Remove the ticker bucket with the fewest entries to free space
+        if not self._avg_volume:
+            return
+        smallest_ticker = min(self._avg_volume, key=lambda t: len(self._avg_volume[t]))
+        removed = len(self._avg_volume.pop(smallest_ticker))
+        self._total_tracked -= removed
+        logger.debug(
+            "Evicted %d entries for ticker %s (total now: %d)",
+            removed,
+            smallest_ticker,
+            self._total_tracked,
+        )
+
+    def _update_average(self, key: str, volume: int, ticker: str) -> float:
         """EMA-style running average. Returns the prior average."""
         bucket = self._avg_volume.setdefault(ticker, {})
         prev = bucket.get(key)
         if prev is None:
             bucket[key] = float(volume)
+            self._total_tracked += 1
+            self._evict_oldest_if_needed()
             return float(volume)
-        alpha = 0.3
-        new_avg = alpha * volume + (1 - alpha) * prev
+        new_avg = self._ema_alpha * volume + (1 - self._ema_alpha) * prev
         bucket[key] = new_avg
         return prev
 
-    def analyze_snapshot(self, underlying: str,
-                         contracts: list[dict]) -> list[Signal]:
+    def analyze_snapshot(self, underlying: str, contracts: list[dict]) -> list[Signal]:
         """Analyze a batch of option contract snapshots and return signals."""
         signals = []
         now = datetime.now()
+        self._maybe_reset_for_new_day(now)
 
         for c in contracts:
             try:
@@ -61,8 +105,9 @@ class Detector:
 
         return signals
 
-    def _evaluate_contract(self, underlying: str, raw: dict,
-                           now: datetime) -> Signal | None:
+    def _evaluate_contract(
+        self, underlying: str, raw: dict, now: datetime
+    ) -> Signal | None:
         """Evaluate a single contract snapshot dict from Polygon."""
         details = raw.get("details", {})
         day = raw.get("day", {})
@@ -164,8 +209,13 @@ class Detector:
             last_price=last_price,
         )
 
-    def _build_description(self, c: OptionsContract, vol_ratio: float,
-                           premium: float, signal_types: list[str]) -> str:
+    def _build_description(
+        self,
+        c: OptionsContract,
+        vol_ratio: float,
+        premium: float,
+        signal_types: list[str],
+    ) -> str:
         sig = Signal(
             timestamp=datetime.now(),
             ticker=c.ticker,
