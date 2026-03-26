@@ -1,7 +1,7 @@
 """Web dashboard for monitoring scan results and signal history."""
 
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 
 from aiohttp import web
 
@@ -134,7 +134,7 @@ class DashboardServer:
         return web.Response(text=_DASHBOARD_HTML, content_type="text/html")
 
     async def _api_status(self, request: web.Request) -> web.Response:
-        uptime = (datetime.utcnow() - self.health._started_at).total_seconds()
+        uptime = (datetime.now(timezone.utc) - self.health._started_at).total_seconds()
         body = {
             "status": "running" if self.health.is_running else "idle",
             "uptime_seconds": round(uptime, 1),
@@ -151,7 +151,7 @@ class DashboardServer:
 
     async def _api_signals(self, request: web.Request) -> web.Response:
         limit = min(int(request.query.get("limit", "50")), 200)
-        date_str = request.query.get("date", datetime.utcnow().strftime("%Y-%m-%d"))
+        date_str = request.query.get("date", datetime.now(timezone.utc).strftime("%Y-%m-%d"))
         signals = await self.db.get_today_signals(date_str)
         return web.json_response([self._signal_to_dict(s) for s in signals[:limit]])
 

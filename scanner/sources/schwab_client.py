@@ -26,7 +26,7 @@ import asyncio
 import json
 import logging
 import time
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Optional
 from urllib.parse import urlencode
@@ -401,7 +401,7 @@ class SchwabClient:
     def is_extended_hours() -> bool:
         """Return True if current ET time is in pre or after-market hours."""
         et_offset = timedelta(hours=-4)  # EDT; adjust for EST in winter if needed
-        now_et = datetime.utcnow() + et_offset
+        now_et = datetime.now(timezone.utc).replace(tzinfo=None) + et_offset
         hour = now_et.hour
         minute = now_et.minute
         # Pre-market: 4:00 AM – 9:30 AM ET

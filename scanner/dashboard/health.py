@@ -1,7 +1,7 @@
 """Lightweight HTTP health check server for container orchestration."""
 
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 
 from aiohttp import web
 
@@ -18,7 +18,7 @@ class HealthServer:
         self._app.router.add_get("/health", self._health)
         self._app.router.add_get("/status", self._status)
         self._runner: web.AppRunner | None = None
-        self._started_at = datetime.utcnow()
+        self._started_at = datetime.now(timezone.utc)
 
         # Mutable state updated by the scanner
         self.scan_count = 0
@@ -44,7 +44,7 @@ class HealthServer:
 
     async def _status(self, request: web.Request) -> web.Response:
         """Readiness/status probe with operational metrics."""
-        uptime = (datetime.utcnow() - self._started_at).total_seconds()
+        uptime = (datetime.now(timezone.utc) - self._started_at).total_seconds()
         body = {
             "status": "running" if self.is_running else "idle",
             "uptime_seconds": round(uptime, 1),
